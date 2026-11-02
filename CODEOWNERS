@@ -1,0 +1,4 @@
+# Shared domain contracts, ViewModel orchestration, and DI container
+/app/src/main/java/es/upm/sensoasis/domain/ @Phantom-0000
+/app/src/main/java/es/upm/sensoasis/viewmodel/ @Phantom-0000
+/app/src/main/java/es/upm/sensoasis/di/ @Phantom-0000

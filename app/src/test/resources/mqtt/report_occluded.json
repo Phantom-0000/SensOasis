@@ -1,0 +1,12 @@
+{
+  "fountainId": "MADRID_FT_042",
+  "status": "WORKING",
+  "lightObservation": {
+    "ambientLux": null,
+    "lightBand": null,
+    "quality": "OCCLUDED",
+    "observedAt": "2026-10-21T14:12:00Z"
+  },
+  "observedAt": "2026-10-21T14:12:00Z",
+  "expiresAt": "2026-10-21T14:32:00Z"
+}
