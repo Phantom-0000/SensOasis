@@ -30,6 +30,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import java.util.UUID
+import es.upm.sensoasis.speech.AndroidSpeechController
+import es.upm.sensoasis.speech.RealPrivateSpeechController
+import es.upm.sensoasis.speech.RealSpeechSummaryUseCase
+import es.upm.sensoasis.sensor.proximity.AndroidProximityStateProvider
 
 /**
  * Manual Dependency Injection container.
@@ -46,8 +50,8 @@ class AppContainer(context: Context) {
     val useFakeOpenData: Boolean = true
     val useFakeMqtt: Boolean = true
     val useFakeLightSensor: Boolean = false
-    val useFakeProximity: Boolean = true
-    val useFakeSpeech: Boolean = true
+    val useFakeProximity: Boolean = false
+    val useFakeSpeech: Boolean = false
     val useFakeLocation: Boolean = false
 
     /** Application-wide scope for work that must outlive a ViewModel (e.g. MQTT disconnect). */
@@ -92,8 +96,7 @@ class AppContainer(context: Context) {
         if (useFakeProximity) {
             fakeProximityStateProvider
         } else {
-            // Replace with RealProximityStateProvider(appContext)
-            fakeProximityStateProvider
+            AndroidProximityStateProvider(appContext)
         }
     }
 
@@ -153,8 +156,7 @@ class AppContainer(context: Context) {
         if (useFakeSpeech) {
             FakeSpeechSummaryUseCase()
         } else {
-            // Replace with RealSpeechSummaryUseCase()
-            FakeSpeechSummaryUseCase()
+            RealSpeechSummaryUseCase()
         }
     }
 
@@ -162,10 +164,10 @@ class AppContainer(context: Context) {
         if (useFakeSpeech) {
             FakeSpeechController()
         } else {
-            // Replace with RealSpeechController(appContext)
-            FakeSpeechController()
+            AndroidSpeechController(appContext)
         }
     }
+
 
     val privateSpeechController: PrivateSpeechController by lazy {
         if (useFakeSpeech) {
@@ -174,10 +176,10 @@ class AppContainer(context: Context) {
                 summaryUseCase = speechSummaryUseCase
             )
         } else {
-            // Replace with RealPrivateSpeechController(proximityStateProvider, speechSummaryUseCase, speechController)
-            FakePrivateSpeechController(
+            RealPrivateSpeechController(
                 proximityStateProvider = proximityStateProvider,
-                summaryUseCase = speechSummaryUseCase
+                summaryUseCase = speechSummaryUseCase,
+                speechController = speechController
             )
         }
     }

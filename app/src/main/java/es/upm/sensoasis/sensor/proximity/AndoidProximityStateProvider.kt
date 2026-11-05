@@ -66,8 +66,7 @@ class AndroidProximityStateProvider(
 
         if (event == null || event.values.isEmpty()) return
 
-        _state.value =
-            if (event.values[0] < sensor.maximumRange) {
+        _state.value = if (event.values[0] < proximitySensor.maximumRange) {
                 ProximityState.NEAR
             } else {
                 ProximityState.FAR
