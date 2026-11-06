@@ -14,6 +14,5 @@
 .externalNativeBuild
 .cxx
 local.properties
-# IDE and Gradle local configuration
 .idea/
 gradle/gradle-daemon-jvm.properties
