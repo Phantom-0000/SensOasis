@@ -1,16 +1,29 @@
+
 package es.upm.sensoasis.ui.screens
 
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -19,25 +32,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import es.upm.sensoasis.domain.model.FountainStatus
 import es.upm.sensoasis.domain.model.LightCaptureResult
+import es.upm.sensoasis.domain.model.formatLightBand
 import es.upm.sensoasis.domain.model.formatLux
+import es.upm.sensoasis.domain.model.formatUnavailableReason
 import es.upm.sensoasis.fake.SampleData
 import es.upm.sensoasis.ui.theme.SensOasisTheme
+import es.upm.sensoasis.viewmodel.ReportFlowState
 import es.upm.sensoasis.viewmodel.SensOasisUiState
 import es.upm.sensoasis.viewmodel.UiAction
 
-/**
- * Designated NO-SCROLL target screen in both portrait and landscape orientations.
- * Uses distinct portrait (`Column`) and landscape (`Row`) layouts so all controls and the
- * captured ambient-light preview remain 100% visible without scrolling on the moto g35 5G.
- *
- * Lifecycle Rule:
- * Dispatches [UiAction.LeaveReportScreen] only when the user explicitly navigates back,
- * NOT inside an unconditional `DisposableEffect.onDispose`, so screen rotation preserves state.
- */
 @Composable
 fun ReportScreen(
     state: SensOasisUiState,
@@ -46,10 +57,14 @@ fun ReportScreen(
     modifier: Modifier = Modifier
 ) {
     BackHandler {
-        onNavigateBack()
+        if (!state.interactionLocked) {
+            onNavigateBack()
+        }
     }
 
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape =
+        LocalConfiguration.current.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
 
     if (isLandscape) {
         Row(
@@ -64,19 +79,20 @@ fun ReportScreen(
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                ReportHeaderAndStatusSection(
+                ReportHeaderSection(
                     state = state,
                     onAction = onAction,
                     onNavigateBack = onNavigateBack
                 )
             }
+
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                ReportLightPreviewAndSubmitSection(
+                ReportLightSection(
                     state = state,
                     onAction = onAction
                 )
@@ -89,12 +105,13 @@ fun ReportScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            ReportHeaderAndStatusSection(
+            ReportHeaderSection(
                 state = state,
                 onAction = onAction,
                 onNavigateBack = onNavigateBack
             )
-            ReportLightPreviewAndSubmitSection(
+
+            ReportLightSection(
                 state = state,
                 onAction = onAction
             )
@@ -102,45 +119,132 @@ fun ReportScreen(
     }
 }
 
+// ----------------------------------------------------
+// HEADER AND FOUNTAIN STATUS
+// ----------------------------------------------------
+
 @Composable
-private fun ReportHeaderAndStatusSection(
+private fun ReportHeaderSection(
     state: SensOasisUiState,
     onAction: (UiAction) -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedButton(onClick = onNavigateBack) {
-                Text("Cancel")
+            OutlinedButton(
+                onClick = onNavigateBack,
+                enabled = !state.interactionLocked,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+                Text(
+                    text = "Cancel",
+                    fontSize = 14.sp
+                )
             }
+
             Text(
                 text = state.selectedFountain?.name ?: "Report Fountain",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Text(
                     text = "1. Select Fountain Status",
-                    style = MaterialTheme.typography.titleSmall
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
                 )
+
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf(FountainStatus.WORKING, FountainStatus.NOT_WORKING).forEach { option ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    listOf(
+                        FountainStatus.WORKING,
+                        FountainStatus.NOT_WORKING
+                    ).forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .clickable(
+                                    enabled = !state.interactionLocked,
+                                    role = Role.RadioButton,
+                                    onClick = {
+                                        onAction(
+                                            UiAction.ChangeFountainStatus(option)
+                                        )
+                                    }
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             RadioButton(
                                 selected = state.reportDraftStatus == option,
-                                onClick = { onAction(UiAction.ChangeFountainStatus(option)) },
+                                onClick = null,
                                 enabled = !state.interactionLocked
                             )
-                            Text(text = option.name.replace('_', ' '))
+
+                            Icon(
+                                imageVector = if (
+                                    option == FountainStatus.WORKING
+                                ) {
+                                    Icons.Default.CheckCircle
+                                } else {
+                                    Icons.Default.Warning
+                                },
+                                contentDescription = if (
+                                    option == FountainStatus.WORKING
+                                ) {
+                                    "Working"
+                                } else {
+                                    "Not working"
+                                },
+                                tint = if (
+                                    option == FountainStatus.WORKING
+                                ) {
+                                    Color(0xFF247A45)
+                                } else {
+                                    Color(0xFFB3261E)
+                                },
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .padding(end = 6.dp)
+                            )
+
+                            Text(
+                                text = if (option == FountainStatus.WORKING) {
+                                    "Working"
+                                } else {
+                                    "Not Working"
+                                },
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                 }
@@ -149,61 +253,197 @@ private fun ReportHeaderAndStatusSection(
     }
 }
 
+// ----------------------------------------------------
+// AMBIENT LIGHT AND REPORT SUBMISSION
+// ----------------------------------------------------
+
 @Composable
-private fun ReportLightPreviewAndSubmitSection(
+private fun ReportLightSection(
     state: SensOasisUiState,
     onAction: (UiAction) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Card(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(
                 modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "2. Ambient-Light Observation (Optional)",
-                    style = MaterialTheme.typography.titleSmall
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
                 )
+
                 Text(
-                    text = "Proximity: ${state.proximityState} | Flow: ${state.reportState}",
-                    style = MaterialTheme.typography.bodySmall
+                    text = "Proximity: ${proximityLabel(state.proximityState.name)} | " +
+                            "Report: ${reportStateLabel(state.reportState)}",
+                    fontSize = 14.sp
                 )
-                val lightPreviewText = when (val light = state.lightState) {
-                    null -> "Not captured yet. You can capture light or submit status directly."
-                    is LightCaptureResult.Valid ->
-                        "VALID: ${formatLux(light.observation.ambientLux)} (${light.observation.lightBand})"
+
+                val lightMessage = when (val light = state.lightState) {
+                    null ->
+                        "Not captured yet. You can capture ambient light or submit the status directly."
+
+                    is LightCaptureResult.Valid -> {
+                        "Captured: ${formatLux(light.observation.ambientLux)}\n" +
+                                formatLightBand(light.observation.lightBand)
+                    }
+
                     LightCaptureResult.Occluded ->
-                        "OCCLUDED: Sensor covered (NEAR). Report will submit without light."
+                        "Sensor covered. Report will be submitted without light data."
+
                     is LightCaptureResult.Unavailable ->
-                        "UNAVAILABLE (${light.reason}). Report will submit without light."
+                        "Sensor unavailable: ${formatUnavailableReason(light.reason)}. You can still submit the report."
+
                     is LightCaptureResult.Error ->
-                        "ERROR (${light.message}). Report will submit without light."
+                        "Sensor error: ${light.message}. You can still submit the report."
                 }
+
                 Text(
-                    text = lightPreviewText,
-                    style = MaterialTheme.typography.bodyMedium
+                    text = lightMessage,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp
                 )
+
                 OutlinedButton(
-                    onClick = { onAction(UiAction.CaptureLight) },
-                    enabled = !state.interactionLocked && state.reportState.canSubmit,
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = {
+                        onAction(UiAction.CaptureLight)
+                    },
+                    enabled = !state.interactionLocked &&
+                            state.reportState.canSubmit &&
+                            state.reportState != ReportFlowState.PUBLISHED,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                 ) {
-                    Text("Capture Ambient Light (1.5s)")
+                    Icon(
+                        imageVector = Icons.Default.LightMode,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
+                    Text(
+                        text = if (
+                            state.reportState == ReportFlowState.CAPTURING_LIGHT
+                        ) {
+                            "Measuring light..."
+                        } else {
+                            "Capture Ambient Light (1.5s)"
+                        },
+                        fontSize = 14.sp
+                    )
                 }
             }
         }
 
+        if (state.interactionLocked) {
+            Button(
+                onClick = {
+                    onAction(UiAction.StopSpeech)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Stop,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+                Text(
+                    text = "Stop Speech",
+                    fontSize = 16.sp
+                )
+            }
+        }
+
+        val submitLabel = when (state.reportState) {
+            ReportFlowState.PUBLISHING ->
+                "Publishing MQTT Report..."
+
+            ReportFlowState.PUBLISHED ->
+                "Report Published Successfully!"
+
+            ReportFlowState.OFFLINE ->
+                "MQTT Offline - Retry"
+
+            ReportFlowState.ERROR ->
+                "Retry Report Submission"
+
+            else ->
+                "Confirm & Publish MQTT Report"
+        }
+
         Button(
-            onClick = { onAction(UiAction.SubmitReport) },
-            enabled = !state.interactionLocked && state.reportState.canSubmit,
-            modifier = Modifier.fillMaxWidth()
+            onClick = {
+                onAction(UiAction.SubmitReport)
+            },
+            enabled = !state.interactionLocked &&
+                    state.reportState.canSubmit &&
+                    state.reportState != ReportFlowState.PUBLISHED,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
         ) {
-            Text("Confirm & Publish MQTT Report")
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Send,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 6.dp)
+            )
+            Text(
+                text = submitLabel,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        state.error?.let { error ->
+            Text(
+                text = "Warning: $error",
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 14.sp
+            )
         }
     }
 }
 
-@Preview(showBackground = true, name = "Report Portrait")
+// ----------------------------------------------------
+// ACCESSIBILITY LABELS
+// ----------------------------------------------------
+
+private fun proximityLabel(value: String): String {
+    return when (value) {
+        "NEAR" -> "Near"
+        "FAR" -> "Far"
+        else -> "Waiting for sensor reading"
+    }
+}
+
+private fun reportStateLabel(state: ReportFlowState): String {
+    return when (state) {
+        ReportFlowState.IDLE -> "Ready to report"
+        ReportFlowState.CAPTURING_LIGHT -> "Measuring ambient light"
+        ReportFlowState.READY -> "Ready to publish"
+        ReportFlowState.OCCLUDED -> "Light sensor covered"
+        ReportFlowState.UNAVAILABLE -> "Light sensor unavailable"
+        ReportFlowState.PUBLISHING -> "Sending report"
+        ReportFlowState.PUBLISHED -> "Report sent successfully"
+        ReportFlowState.OFFLINE -> "MQTT connection unavailable"
+        ReportFlowState.ERROR -> "Report error"
+    }
+}
+
+// ----------------------------------------------------
+// ANDROID STUDIO PREVIEWS
+// ----------------------------------------------------
+
+@Preview(
+    showBackground = true,
+    name = "Report Portrait"
+)
 @Composable
 private fun ReportScreenPortraitPreview() {
     SensOasisTheme {
@@ -215,7 +455,12 @@ private fun ReportScreenPortraitPreview() {
     }
 }
 
-@Preview(showBackground = true, widthDp = 800, heightDp = 360, name = "Report Landscape")
+@Preview(
+    showBackground = true,
+    widthDp = 800,
+    heightDp = 360,
+    name = "Report Landscape"
+)
 @Composable
 private fun ReportScreenLandscapePreview() {
     SensOasisTheme {
