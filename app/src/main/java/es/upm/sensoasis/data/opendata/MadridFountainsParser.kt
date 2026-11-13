@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.util.Locale
 import kotlin.math.pow
 
 /** Parses the current Madrid open-data schema and the app's simplified bundled fallback. */
@@ -54,7 +55,15 @@ object MadridFountainsParser {
         ).joinToString(" ")
         val extraAddress = value("DIRECCION_AUX", "address", "DIRECCION")
         val address = listOf(road, extraAddress.orEmpty()).filter { it.isNotBlank() }.distinct().joinToString(", ")
+        // Madrid's fountain feed has no canonical display-name column in every release.
+        // Prefer its human-readable location fields over opaque dataset/internal IDs.
+        val neighborhood = value("BARRIO", "neighborhood")
+        val descriptiveLocation = listOfNotNull(extraAddress, road, neighborhood)
+            .map(::formatLocationName)
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .joinToString(" · ")
         val name = value("NOMBRE", "name", "title", "DENOMINACION")
+            ?: descriptiveLocation.takeIf { it.isNotBlank() }?.let { "Fuente · $it" }
             ?: internalCode?.let { "Fuente $it" }
             ?: "Fuente $id"
         val status = when (value("ESTADO", "officialStatus", "status")?.uppercase()) {
@@ -63,6 +72,14 @@ object MadridFountainsParser {
             else -> FountainStatus.UNKNOWN
         }
         return Fountain(id, name, coordinates, status, address = address)
+    }
+
+    private fun formatLocationName(value: String): String {
+        val locale = Locale.forLanguageTag("es-ES")
+        val particles = setOf("de", "del", "la", "las", "los", "y", "en", "el")
+        return value.trim().lowercase(locale).split(Regex("\\s+")).mapIndexed { index, word ->
+            if (index == 0 || word !in particles) word.replaceFirstChar { it.titlecase(locale) } else word
+        }.joinToString(" ")
     }
 
     /** Madrid reports ETRS89 UTM zone 30 coordinates in metres. */

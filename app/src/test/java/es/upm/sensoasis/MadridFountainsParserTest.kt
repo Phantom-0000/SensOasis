@@ -28,7 +28,7 @@ class MadridFountainsParserTest {
         val fountain = MadridFountainsParser.parse(source).single()
 
         assertEquals("10030549", fountain.id)
-        assertEquals("Fuente FUE_18_0089", fountain.name)
+        assertEquals("Fuente · Calle Muela de San Juan 5", fountain.name)
         assertEquals(FountainStatus.WORKING, fountain.officialStatus)
         assertEquals(40.37540321, fountain.coordinates.latitude, 0.000001)
         assertEquals(-3.61900539, fountain.coordinates.longitude, 0.000001)
