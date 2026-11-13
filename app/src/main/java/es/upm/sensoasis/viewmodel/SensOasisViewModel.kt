@@ -11,6 +11,7 @@ import es.upm.sensoasis.domain.contract.OpenDataRepository
 import es.upm.sensoasis.domain.contract.PrivateSpeechController
 import es.upm.sensoasis.domain.contract.ProximityStateProvider
 import es.upm.sensoasis.domain.contract.ReportUseCase
+import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.Constants
 import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.domain.model.DataResult
@@ -107,7 +108,7 @@ class SensOasisViewModel(
             is UiAction.EnablePrivateSpeech -> setPrivateSpeechEnabled(action.enabled)
             UiAction.StopSpeech -> privateSpeechController.stop()
             UiAction.OpenWalkingRoute -> openWalkingRoute()
-            UiAction.RefreshFountains -> loadFountains()
+            UiAction.RefreshFountains -> refreshFountains()
             UiAction.RefreshLocation -> refreshLocation()
             UiAction.ClearError -> _uiState.update { it.copy(error = null) }
         }
@@ -214,6 +215,14 @@ class SensOasisViewModel(
                     }
                 }
             }
+        }
+    }
+
+    private fun refreshFountains() {
+        loadFountains()
+        val mqtt = _uiState.value.mqttState
+        if (mqtt == ConnectionState.DISCONNECTED || mqtt == ConnectionState.ERROR) {
+            connectMqtt()
         }
     }
 
@@ -328,7 +337,11 @@ class SensOasisViewModel(
                 error = null
             )
         }
-        syncDerivedState()
+        if (_uiState.value.privateSpeechEnabled) {
+            setPrivateSpeechEnabled(false)
+        } else {
+            syncDerivedState()
+        }
     }
 
     private fun captureLight() {
@@ -370,6 +383,10 @@ class SensOasisViewModel(
 
         viewModelScope.launch {
             _uiState.update { it.copy(reportState = ReportFlowState.PUBLISHING, error = null) }
+            val mqtt = _uiState.value.mqttState
+            if (mqtt == ConnectionState.DISCONNECTED || mqtt == ConnectionState.ERROR) {
+                mqttRepository.connect()
+            }
             val result = reportUseCase.submitReport(
                 fountainId = fountain.id,
                 status = current.reportDraftStatus,

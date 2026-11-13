@@ -1,5 +1,6 @@
 package es.upm.sensoasis
 
+import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.Constants
 import es.upm.sensoasis.domain.model.FountainReport
 import es.upm.sensoasis.domain.model.FountainStatus
@@ -323,5 +324,51 @@ class SensOasisContractAndViewModelTest {
             viewModel.uiState.value.reportState
         )
         assertTrue(viewModel.uiState.value.reportState.canSubmit)
+    }
+
+    @Test
+    fun `OpenReport disables privateSpeechEnabled so covering sensor on ReportScreen does not lock interaction`() = runTest {
+        viewModel.onAction(UiAction.EnablePrivateSpeech(true))
+        assertTrue(viewModel.uiState.value.privateSpeechEnabled)
+        assertTrue(proximityStateProvider.isActive)
+
+        viewModel.onAction(UiAction.OpenReport)
+        assertFalse("Entering ReportScreen must disable private speech", viewModel.uiState.value.privateSpeechEnabled)
+        assertEquals(SpeechState.IDLE, viewModel.uiState.value.speechState)
+        assertTrue("Proximity sensor must stay active for ReportScreen occlusion check", proximityStateProvider.isActive)
+
+        // Covering the top sensor to demonstrate OCCLUDED light capture must not lock ReportScreen buttons
+        proximityStateProvider.setSimulatedState(ProximityState.NEAR)
+        assertFalse("interactionLocked must remain false on ReportScreen", viewModel.uiState.value.interactionLocked)
+    }
+
+    @Test
+    fun `RefreshFountains and retry SubmitReport reconnect MQTT when previously disconnected`() = runTest {
+        viewModel.onAction(UiAction.SelectFountain("MADRID_FT_042"))
+        viewModel.onAction(UiAction.OpenReport)
+
+        // Disconnect broker -> submission fails with OFFLINE
+        mqttRepository.disconnect()
+        assertEquals(ConnectionState.DISCONNECTED, viewModel.uiState.value.mqttState)
+
+        mqttRepository.simulateOffline = true
+        viewModel.onAction(UiAction.SubmitReport)
+        assertEquals(ReportFlowState.OFFLINE, viewModel.uiState.value.reportState)
+
+        // Broker becomes reachable again (still DISCONNECTED until connect() is retried)
+        mqttRepository.disconnect()
+        mqttRepository.simulateOffline = false
+        assertEquals(ConnectionState.DISCONNECTED, viewModel.uiState.value.mqttState)
+
+        // Tapping Retry (SubmitReport) reconnects and publishes immediately
+        viewModel.onAction(UiAction.SubmitReport)
+        assertEquals(ConnectionState.CONNECTED, viewModel.uiState.value.mqttState)
+        assertEquals(ReportFlowState.PUBLISHED, viewModel.uiState.value.reportState)
+
+        // Likewise, RefreshFountains reconnects when DISCONNECTED
+        mqttRepository.disconnect()
+        assertEquals(ConnectionState.DISCONNECTED, viewModel.uiState.value.mqttState)
+        viewModel.onAction(UiAction.RefreshFountains)
+        assertEquals(ConnectionState.CONNECTED, viewModel.uiState.value.mqttState)
     }
 }
