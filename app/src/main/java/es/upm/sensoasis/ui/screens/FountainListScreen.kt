@@ -99,7 +99,9 @@ fun FountainListScreen(
                         )
                         communityReport?.let { report ->
                             val age = report.ageMinutes(state.now)
-                            val lightText = report.lightObservation?.lightBand?.let { " • Light: $it" } ?: ""
+                            val lightText = report.lightObservation
+                                ?.takeIf { it.quality == es.upm.sensoasis.domain.model.LightQuality.VALID }
+                                ?.let { " • Community light reading: ${it.lightBand}" } ?: ""
                             Text(
                                 text = "Community: ${report.status} (${age}m ago$lightText)",
                                 style = MaterialTheme.typography.bodySmall

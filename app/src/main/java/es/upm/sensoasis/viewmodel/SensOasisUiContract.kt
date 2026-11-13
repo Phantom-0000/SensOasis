@@ -10,6 +10,7 @@ import es.upm.sensoasis.domain.model.LightCaptureResult
 import es.upm.sensoasis.domain.model.LightObservation
 import es.upm.sensoasis.domain.model.ProximityState
 import es.upm.sensoasis.domain.model.SpeechState
+import es.upm.sensoasis.domain.model.ReportReceiveState
 import java.time.Instant
 
 /**
@@ -56,6 +57,7 @@ data class SensOasisUiState(
     val privateSpeechEnabled: Boolean = false,
     val speechState: SpeechState = SpeechState.IDLE,
     val mqttState: ConnectionState = ConnectionState.DISCONNECTED,
+    val mqttReceiveState: ReportReceiveState = ReportReceiveState.WAITING,
     val interactionLocked: Boolean = false,
     val now: Instant = Instant.now(),
     val error: String? = null

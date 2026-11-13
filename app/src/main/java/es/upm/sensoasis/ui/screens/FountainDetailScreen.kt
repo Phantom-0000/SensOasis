@@ -96,13 +96,13 @@ fun FountainDetailScreen(
                 } else {
                     Text("Reported Status: ${report.status} (${report.ageMinutes(state.now)} min ago)")
                     val light = report.lightObservation
-                    if (light != null && light.ambientLux != null) {
-                        Text("Ambient Light: ${light.lightBand} (${formatLux(light.ambientLux)}, ${light.quality})")
+                    if (light != null && light.quality == es.upm.sensoasis.domain.model.LightQuality.VALID && light.ambientLux != null) {
+                        Text("Community light observation (${report.ageMinutes(state.now)} min old): measured ${formatLux(light.ambientLux)} (${light.lightBand} ambient light).")
                     } else if (light != null) {
                         // e.g. OCCLUDED payload with null lux / null band (report_occluded.json)
-                        Text("Ambient Light: No reading (${light.quality})")
+                        Text("Community light observation: no usable reading (${light.quality}).")
                     } else {
-                        Text("Ambient Light: Not included / Unavailable")
+                        Text("Community report has no light observation.")
                     }
                 }
             }

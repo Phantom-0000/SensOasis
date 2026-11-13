@@ -3,6 +3,7 @@ package es.upm.sensoasis.domain.contract
 import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.FountainReport
 import es.upm.sensoasis.domain.model.PublishResult
+import es.upm.sensoasis.domain.model.ReportReceiveState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface MqttRepository {
     val connectionState: StateFlow<ConnectionState>
+
+    val receiveState: StateFlow<ReportReceiveState>
 
     suspend fun connect()
 

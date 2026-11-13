@@ -76,6 +76,7 @@ class SensOasisViewModel(
     private var wasProximityNeeded: Boolean = false
     private var isAppInBackground: Boolean = false
     private var captureJob: Job? = null
+    private var airQualityJob: Job? = null
 
     /**
      * Fountain id requested via [UiAction.SelectFountain] before the fountain list finished loading
@@ -194,6 +195,7 @@ class SensOasisViewModel(
                         )
                     }
                     syncDerivedState()
+                    _uiState.value.selectedFountain?.let(::loadAirQuality)
                 }
 
                 is DataResult.Unavailable -> {
@@ -227,6 +229,11 @@ class SensOasisViewModel(
         viewModelScope.launch {
             mqttRepository.connectionState.collect { conn ->
                 _uiState.update { it.copy(mqttState = conn) }
+            }
+        }
+        viewModelScope.launch {
+            mqttRepository.receiveState.collect { receiveState ->
+                _uiState.update { it.copy(mqttReceiveState = receiveState) }
             }
         }
     }
@@ -314,6 +321,34 @@ class SensOasisViewModel(
             )
         }
         syncDerivedState()
+        _uiState.value.selectedFountain?.let(::loadAirQuality)
+    }
+
+    private fun loadAirQuality(fountain: Fountain) {
+        airQualityJob?.cancel()
+        airQualityJob = viewModelScope.launch {
+            when (val result = openDataRepository.getAirQuality(fountain.coordinates)) {
+                is DataResult.Success -> {
+                    _uiState.update { current ->
+                        val updatedFountains = current.fountains.map { item ->
+                            if (item.id == fountain.id) item.copy(airQuality = result.value) else item
+                        }
+                        if (current.selectedFountain?.id == fountain.id) {
+                            val updatedSelected = current.selectedFountain.copy(airQuality = result.value)
+                            current.copy(
+                                fountains = updatedFountains,
+                                selectedFountain = updatedSelected,
+                                airQuality = result.value
+                            )
+                        } else {
+                            current.copy(fountains = updatedFountains)
+                        }
+                    }
+                    syncDerivedState()
+                }
+                is DataResult.Unavailable, is DataResult.Error -> Unit
+            }
+        }
     }
 
     private fun openReport() {
