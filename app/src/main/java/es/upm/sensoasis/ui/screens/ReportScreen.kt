@@ -70,7 +70,7 @@ fun ReportScreen(
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Column(
@@ -82,7 +82,8 @@ fun ReportScreen(
                 ReportHeaderSection(
                     state = state,
                     onAction = onAction,
-                    onNavigateBack = onNavigateBack
+                    onNavigateBack = onNavigateBack,
+                    isLandscape = true
                 )
             }
 
@@ -94,7 +95,8 @@ fun ReportScreen(
             ) {
                 ReportLightSection(
                     state = state,
-                    onAction = onAction
+                    onAction = onAction,
+                    isLandscape = true
                 )
             }
         }
@@ -108,12 +110,14 @@ fun ReportScreen(
             ReportHeaderSection(
                 state = state,
                 onAction = onAction,
-                onNavigateBack = onNavigateBack
+                onNavigateBack = onNavigateBack,
+                isLandscape = false
             )
 
             ReportLightSection(
                 state = state,
-                onAction = onAction
+                onAction = onAction,
+                isLandscape = false
             )
         }
     }
@@ -127,10 +131,11 @@ fun ReportScreen(
 private fun ReportHeaderSection(
     state: SensOasisUiState,
     onAction: (UiAction) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    isLandscape: Boolean = false
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -149,7 +154,8 @@ private fun ReportHeaderSection(
                 )
                 Text(
                     text = "Cancel",
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
+                    maxLines = 1
                 )
             }
 
@@ -157,7 +163,7 @@ private fun ReportHeaderSection(
                 text = state.selectedFountain?.name ?: "Report Fountain",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
+                fontSize = if (isLandscape) 16.sp else 17.sp,
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 8.dp),
@@ -170,19 +176,20 @@ private fun ReportHeaderSection(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.padding(if (isLandscape) 10.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isLandscape) 2.dp else 6.dp)
             ) {
                 Text(
                     text = "1. Select Fountain Status",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
+                    fontSize = if (isLandscape) 16.sp else 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     listOf(
                         FountainStatus.WORKING,
@@ -190,7 +197,7 @@ private fun ReportHeaderSection(
                     ).forEach { option ->
                         Row(
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .heightIn(min = 48.dp)
                                 .clickable(
                                     enabled = !state.interactionLocked,
@@ -232,8 +239,8 @@ private fun ReportHeaderSection(
                                     Color(0xFFB3261E)
                                 },
                                 modifier = Modifier
-                                    .size(22.dp)
                                     .padding(end = 6.dp)
+                                    .size(22.dp)
                             )
 
                             Text(
@@ -243,7 +250,9 @@ private fun ReportHeaderSection(
                                     "Not Working"
                                 },
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -260,28 +269,33 @@ private fun ReportHeaderSection(
 @Composable
 private fun ReportLightSection(
     state: SensOasisUiState,
-    onAction: (UiAction) -> Unit
+    onAction: (UiAction) -> Unit,
+    isLandscape: Boolean = false
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 8.dp)
     ) {
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(if (isLandscape) 8.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isLandscape) 4.dp else 8.dp)
             ) {
                 Text(
                     text = "2. Ambient-Light Observation (Optional)",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = if (isLandscape) 15.sp else 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Text(
                     text = "Proximity: ${proximityLabel(state.proximityState.name)} | " +
                             "Report: ${reportStateLabel(state.reportState)}",
-                    fontSize = 14.sp
+                    fontSize = if (isLandscape) 13.sp else 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 val lightMessage = when (val light = state.lightState) {
@@ -289,7 +303,8 @@ private fun ReportLightSection(
                         "Not captured yet. You can capture ambient light or submit the status directly."
 
                     is LightCaptureResult.Valid -> {
-                        "Captured: ${formatLux(light.observation.ambientLux)}\n" +
+                        val sep = if (isLandscape) " — " else "\n"
+                        "Captured: ${formatLux(light.observation.ambientLux)}$sep" +
                                 formatLightBand(light.observation.lightBand)
                     }
 
@@ -305,8 +320,10 @@ private fun ReportLightSection(
 
                 Text(
                     text = lightMessage,
-                    fontSize = 14.sp,
-                    lineHeight = 19.sp
+                    fontSize = if (isLandscape) 13.sp else 14.sp,
+                    lineHeight = if (isLandscape) 17.sp else 19.sp,
+                    maxLines = if (isLandscape) 2 else 3,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 OutlinedButton(
@@ -333,7 +350,9 @@ private fun ReportLightSection(
                         } else {
                             "Capture Ambient Light (1.5s)"
                         },
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -355,7 +374,8 @@ private fun ReportLightSection(
                 )
                 Text(
                     text = "Stop Speech",
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
+                    maxLines = 1
                 )
             }
         }
@@ -386,7 +406,7 @@ private fun ReportLightSection(
                     state.reportState != ReportFlowState.PUBLISHED,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
+                .heightIn(min = if (isLandscape) 48.dp else 52.dp)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
@@ -396,7 +416,9 @@ private fun ReportLightSection(
             Text(
                 text = submitLabel,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -404,7 +426,9 @@ private fun ReportLightSection(
             Text(
                 text = "Warning: $error",
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 14.sp
+                fontSize = if (isLandscape) 13.sp else 14.sp,
+                maxLines = if (isLandscape) 1 else 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
