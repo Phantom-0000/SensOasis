@@ -1,6 +1,7 @@
 package es.upm.sensoasis.data.opendata
 
 import android.content.Context
+import android.util.Log
 import es.upm.sensoasis.domain.contract.OpenDataRepository
 import es.upm.sensoasis.domain.model.AirQualitySummary
 import es.upm.sensoasis.domain.model.Coordinates
@@ -54,8 +55,14 @@ class RealOpenDataRepository(
         }
         return when (remote) {
             is DataResult.Success -> remote
-            is DataResult.Error -> readBundledFountains(remote.message)
-            is DataResult.Unavailable -> readBundledFountains(remote.reason)
+            is DataResult.Error -> {
+                Log.w(TAG, "Madrid fountain download/parse failed; using bundled sample: ${remote.message}")
+                readBundledFountains(remote.message)
+            }
+            is DataResult.Unavailable -> {
+                Log.w(TAG, "Madrid fountain feed unavailable; using bundled sample: ${remote.reason}")
+                readBundledFountains(remote.reason)
+            }
         }
     }
 
@@ -122,6 +129,7 @@ class RealOpenDataRepository(
     }
 
     companion object {
+        private const val TAG = "MadridOpenData"
         const val FOUNTAINS_ASSET = "samples/fountains_sample.json"
         // Madrid open-data JSON catalog, downloadable without credentials.
         // Override via constructor for an updated catalog URL if Madrid changes its feed.
