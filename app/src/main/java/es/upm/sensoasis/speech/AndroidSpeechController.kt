@@ -165,6 +165,16 @@ class AndroidSpeechController(context: Context) : SpeechController {
     private fun routeAudioToEarpiece() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+
+                // Save the original audio mode and device only once.
+                if (previousMode == null) {
+                    previousMode = audioManager.mode
+                    previousCommunicationDevice =
+                        audioManager.communicationDevice
+                }
+
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
                 val devices = audioManager.availableCommunicationDevices
 
                 val earpiece = devices.firstOrNull {
@@ -175,20 +185,20 @@ class AndroidSpeechController(context: Context) : SpeechController {
                     it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
                 }
 
-                previousCommunicationDevice =
-                    audioManager.communicationDevice
-
                 val preferredDevice = earpiece ?: speaker
 
                 if (preferredDevice != null) {
                     communicationDeviceChanged =
                         audioManager.setCommunicationDevice(preferredDevice)
 
-                    if (!communicationDeviceChanged && speaker != null) {
+                    if (!communicationDeviceChanged && speaker != null &&
+                        preferredDevice != speaker
+                    ) {
                         communicationDeviceChanged =
                             audioManager.setCommunicationDevice(speaker)
                     }
                 }
+
             } else {
                 previousMode = audioManager.mode
                 previousSpeakerphone = audioManager.isSpeakerphoneOn
@@ -211,9 +221,10 @@ class AndroidSpeechController(context: Context) : SpeechController {
     /**
      * Restore the previous audio configuration after playback.
      */
+
     private fun restoreAudioRoute() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
                 if (communicationDeviceChanged) {
                     val previous = previousCommunicationDevice
 
@@ -222,26 +233,45 @@ class AndroidSpeechController(context: Context) : SpeechController {
                     } else {
                         audioManager.clearCommunicationDevice()
                     }
-
-                    communicationDeviceChanged = false
-                    previousCommunicationDevice = null
                 }
-            } else {
+            } catch (exception: RuntimeException) {
+                // Do not crash if the device cannot be restored.
+            } finally {
+                communicationDeviceChanged = false
+                previousCommunicationDevice = null
+
+                try {
+                    previousMode?.let {
+                        audioManager.mode = it
+                    }
+                } catch (exception: RuntimeException) {
+                    // Do not crash if the mode cannot be restored.
+                } finally {
+                    previousMode = null
+                }
+            }
+        } else {
+            try {
                 previousMode?.let {
                     audioManager.mode = it
                 }
+            } catch (exception: RuntimeException) {
+                // Do not crash if the mode cannot be restored.
+            }
 
+            try {
                 previousSpeakerphone?.let {
                     audioManager.isSpeakerphoneOn = it
                 }
-
+            } catch (exception: RuntimeException) {
+                // Do not crash if the speakerphone cannot be restored.
+            } finally {
                 previousMode = null
                 previousSpeakerphone = null
             }
-        } catch (exception: RuntimeException) {
-            // Do not crash if the audio route cannot be restored.
         }
     }
+
 
     /**
      * Release the Android TTS engine when the controller is no longer needed.
