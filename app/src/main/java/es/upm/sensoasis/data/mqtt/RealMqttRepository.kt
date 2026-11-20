@@ -54,12 +54,12 @@ class RealMqttRepository(
     private val reportCache = context.applicationContext.getSharedPreferences(REPORT_CACHE, Context.MODE_PRIVATE)
 
     init {
+        observeClientState()
         restoreUnexpiredReports()
     }
 
     override suspend fun connect() {
         _connectionState.value = ConnectionState.CONNECTING
-        observeClientState()
         try {
             when (config.transport) {
                 MqttTransport.TCP -> client.connect(MqttEndpoint.Tcp(config.host, config.port))
@@ -174,7 +174,7 @@ class RealMqttRepository(
     private fun persistAndEmitIfLatest(report: FountainReport) {
         val key = cacheKey(report.fountainId)
         val cached = reportCache.getString(key, null)?.let { runCatching { FountainReportJson.decode(it) }.getOrNull() }
-        if (cached == null || !cached.isExpired(nowProvider()) && !report.observedAt.isBefore(cached.observedAt)) {
+        if (cached == null || cached.isExpired(nowProvider()) || !report.observedAt.isBefore(cached.observedAt)) {
             reportCache.edit().putString(key, FountainReportJson.encode(report)).apply()
             reports.tryEmit(report)
         }
