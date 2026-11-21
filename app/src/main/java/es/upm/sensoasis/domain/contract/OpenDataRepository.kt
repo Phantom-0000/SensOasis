@@ -1,6 +1,7 @@
 package es.upm.sensoasis.domain.contract
 
 import es.upm.sensoasis.domain.model.AirQualitySummary
+import es.upm.sensoasis.domain.model.AirQuality
 import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.domain.model.DataResult
 import es.upm.sensoasis.domain.model.Fountain
@@ -13,4 +14,7 @@ interface OpenDataRepository {
     suspend fun getFountains(): DataResult<List<Fountain>>
 
     suspend fun getAirQuality(location: Coordinates): DataResult<AirQualitySummary>
+
+    /** Public name used by the open air-quality data integration contract. */
+    suspend fun fetchAirQuality(location: Coordinates): DataResult<AirQuality> = getAirQuality(location)
 }

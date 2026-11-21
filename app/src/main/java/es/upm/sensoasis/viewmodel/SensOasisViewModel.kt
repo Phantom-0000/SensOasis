@@ -77,6 +77,7 @@ class SensOasisViewModel(
     private var wasProximityNeeded: Boolean = false
     private var isAppInBackground: Boolean = false
     private var captureJob: Job? = null
+    private var airQualityJob: Job? = null
 
     /**
      * Fountain id requested via [UiAction.SelectFountain] before the fountain list finished loading
@@ -169,10 +170,11 @@ class SensOasisViewModel(
                     pendingSelectedFountainId = null
                     val now = nowProvider()
                     _uiState.update { current ->
+                        val distances = computeDistances(current.userLocation, list)
+                        val orderedFountains = sortFountainsByDistance(list, distances)
                         val selected = pendingId?.let { id -> list.find { it.id == id } }
                             ?: current.selectedFountain?.let { prev -> list.find { it.id == prev.id } }
-                            ?: list.firstOrNull()
-                        val distances = computeDistances(current.userLocation, list)
+                            ?: orderedFountains.firstOrNull()
                         val selectedDist = selected?.let { distances[it.id] }
                         val latestForSelected = selected?.let {
                             current.communityReportsByFountain[it.id]?.takeIf { r -> !r.isExpired(now) }
@@ -184,7 +186,7 @@ class SensOasisViewModel(
                             current.reportDraftStatus
                         }
                         current.copy(
-                            fountains = list,
+                            fountains = orderedFountains,
                             isLoadingFountains = false,
                             selectedFountain = selected,
                             fountainDistancesMeters = distances,
@@ -195,6 +197,7 @@ class SensOasisViewModel(
                         )
                     }
                     syncDerivedState()
+                    _uiState.value.selectedFountain?.let(::loadAirQuality)
                 }
 
                 is DataResult.Unavailable -> {
@@ -236,6 +239,11 @@ class SensOasisViewModel(
         viewModelScope.launch {
             mqttRepository.connectionState.collect { conn ->
                 _uiState.update { it.copy(mqttState = conn) }
+            }
+        }
+        viewModelScope.launch {
+            mqttRepository.receiveState.collect { receiveState ->
+                _uiState.update { it.copy(mqttReceiveState = receiveState) }
             }
         }
     }
@@ -283,8 +291,10 @@ class SensOasisViewModel(
                     val snapshot = result.value
                     _uiState.update { current ->
                         val distances = computeDistances(snapshot.coordinates, current.fountains)
+                        val orderedFountains = sortFountainsByDistance(current.fountains, distances)
                         val selectedDist = current.selectedFountain?.let { distances[it.id] }
                         current.copy(
+                            fountains = orderedFountains,
                             userLocation = snapshot.coordinates,
                             isFallbackLocation = snapshot.isFallback,
                             fountainDistancesMeters = distances,
@@ -323,6 +333,34 @@ class SensOasisViewModel(
             )
         }
         syncDerivedState()
+        _uiState.value.selectedFountain?.let(::loadAirQuality)
+    }
+
+    private fun loadAirQuality(fountain: Fountain) {
+        airQualityJob?.cancel()
+        airQualityJob = viewModelScope.launch {
+            when (val result = openDataRepository.getAirQuality(fountain.coordinates)) {
+                is DataResult.Success -> {
+                    _uiState.update { current ->
+                        val updatedFountains = current.fountains.map { item ->
+                            if (item.id == fountain.id) item.copy(airQuality = result.value) else item
+                        }
+                        if (current.selectedFountain?.id == fountain.id) {
+                            val updatedSelected = current.selectedFountain.copy(airQuality = result.value)
+                            current.copy(
+                                fountains = updatedFountains,
+                                selectedFountain = updatedSelected,
+                                airQuality = result.value
+                            )
+                        } else {
+                            current.copy(fountains = updatedFountains)
+                        }
+                    }
+                    syncDerivedState()
+                }
+                is DataResult.Unavailable, is DataResult.Error -> Unit
+            }
+        }
     }
 
     private fun openReport() {
@@ -529,6 +567,13 @@ class SensOasisViewModel(
         return fountains.associate { fountain ->
             fountain.id to distanceCalculator.distanceMeters(from, fountain.coordinates)
         }
+    }
+
+    private fun sortFountainsByDistance(
+        fountains: List<Fountain>,
+        distances: Map<String, Int>
+    ): List<Fountain> = fountains.sortedBy { fountain ->
+        distances[fountain.id] ?: Int.MAX_VALUE
     }
 
     override fun onCleared() {

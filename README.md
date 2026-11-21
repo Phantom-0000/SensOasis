@@ -92,6 +92,20 @@ When plugging in a real module:
   - `report_occluded.json` — Report payload with occluded light observation (`quality = "OCCLUDED"`, `ambientLux = null`, `lightBand = null`).
   - `report_expired.json` — Historical report past the 20-minute TTL (`expiresAt` in the past).
 
+### Report wire contract and live repositories
+
+Reports are UTF-8 JSON with `fountainId`, `status`, optional `lightObservation`, `observedAt`, and `expiresAt` (ISO-8601 UTC timestamps). The optional observation contains `ambientLux`, `lightBand`, `quality`, and its own `observedAt`. A missing or `null` observation is a valid fountain status report. The canonical null-light example is `app/src/test/resources/mqtt/report_null_light.json`.
+
+- Publish topic: `sensoasis/fountains/{fountainId}/reports` (QoS 1, retained).
+- Community subscription: `sensoasis/fountains/+/reports`.
+- MQTT config continues to come from `local.properties`; `AppContainer` now enables the real MQTT and open-data modules by default. Set `useFakeMqtt` / `useFakeOpenData` to `true` for local deterministic UI runs.
+- The MQTT connection always uses the injected `MqttConfig` host, port, transport, client ID, and topic root, so the teacher VM can be selected through `MQTT_HOST` / `MQTT_PORT` in `local.properties`. No public broker address is hardcoded in `RealMqttRepository`.
+- Madrid fountain JSON is fetched from the official `300051-0-fuentes` download without credentials. Its uppercase dataset fields, WGS84 coordinates, and ETRS89 UTM fallback are parsed. On timeout, HTTP/network error, empty response, or invalid remote JSON, `RealOpenDataRepository` parses the bundled `assets/samples/fountains_sample.json` automatically.
+- Air quality uses the Open-Meteo Air Quality API `current=european_aqi`; it requires no account or API key. Parsed values are exposed as `AirQualitySummary` / `AirQuality`.
+- Community reports are cached locally per fountain, restored on app start, and filtered against `expiresAt`; MQTT 5 message expiry removes stale retained reports from a compatible broker.
+- The MQTTastic client negotiates MQTT 5 with MQTT 3.1.1 fallback. Broker-side retained-message expiry uses MQTT 5; clients still reject expired reports from either protocol.
+- `FountainReportJsonTest` exercises valid, null-light, occluded, and expired wire payloads. The broker integration still requires two devices (or an independent MQTT publisher/subscriber) configured for the same reachable broker and topic root.
+
 ---
 
 ## 6. Module Verification Checklist

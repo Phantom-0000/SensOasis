@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.navigation.compose)
+    implementation("androidx.compose.material:material-icons-extended")
 
     // Serialization & Open Data HTTP
     implementation(libs.kotlinx.serialization.json)

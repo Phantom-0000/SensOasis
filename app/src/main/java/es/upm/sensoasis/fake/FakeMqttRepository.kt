@@ -4,6 +4,7 @@ import es.upm.sensoasis.domain.contract.MqttRepository
 import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.FountainReport
 import es.upm.sensoasis.domain.model.PublishResult
+import es.upm.sensoasis.domain.model.ReportReceiveState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,6 +34,8 @@ class FakeMqttRepository(
         if (simulateOffline) ConnectionState.ERROR else ConnectionState.DISCONNECTED
     )
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+    private val _receiveState = MutableStateFlow(ReportReceiveState.WAITING)
+    override val receiveState: StateFlow<ReportReceiveState> = _receiveState.asStateFlow()
 
     var simulateOffline: Boolean = simulateOffline
         set(value) {
@@ -76,6 +79,7 @@ class FakeMqttRepository(
         publishedReports.add(report)
         if (!report.isExpired(nowProvider())) {
             reportsFlow.emit(report)
+            _receiveState.value = ReportReceiveState.RECEIVED
         }
         return PublishResult.Published
     }
@@ -87,6 +91,9 @@ class FakeMqttRepository(
     suspend fun emitIncomingBrokerReport(report: FountainReport) {
         if (!report.isExpired(nowProvider())) {
             reportsFlow.emit(report)
+            _receiveState.value = ReportReceiveState.RECEIVED
+        } else {
+            _receiveState.value = ReportReceiveState.EXPIRED
         }
     }
 

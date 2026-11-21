@@ -64,3 +64,11 @@ enum class ConnectionState {
     CONNECTED,
     ERROR
 }
+
+/** Last MQTT ingress outcome, kept separate from broker connectivity. */
+enum class ReportReceiveState {
+    WAITING,
+    RECEIVED,
+    INVALID_PAYLOAD,
+    EXPIRED
+}

@@ -14,6 +14,8 @@ import es.upm.sensoasis.domain.contract.SpeechController
 import es.upm.sensoasis.domain.contract.SpeechSummaryUseCase
 import es.upm.sensoasis.domain.model.MqttConfig
 import es.upm.sensoasis.domain.model.MqttTransport
+import es.upm.sensoasis.data.mqtt.RealMqttRepository
+import es.upm.sensoasis.data.opendata.RealOpenDataRepository
 import es.upm.sensoasis.fake.FakeLightSensorController
 import es.upm.sensoasis.fake.FakeLocationProvider
 import es.upm.sensoasis.fake.FakeMqttRepository
@@ -26,10 +28,15 @@ import es.upm.sensoasis.fake.FakeSpeechSummaryUseCase
 import es.upm.sensoasis.location.FusedLocationProvider
 import es.upm.sensoasis.location.HaversineDistanceCalculator
 import es.upm.sensoasis.sensor.light.RealLightSensorController
+import es.upm.sensoasis.usecase.SubmitFountainReportUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import java.util.UUID
+import es.upm.sensoasis.speech.AndroidSpeechController
+import es.upm.sensoasis.speech.RealPrivateSpeechController
+import es.upm.sensoasis.speech.RealSpeechSummaryUseCase
+import es.upm.sensoasis.sensor.proximity.AndroidProximityStateProvider
 
 /**
  * Manual Dependency Injection container.
@@ -43,11 +50,11 @@ class AppContainer(context: Context) {
 
     // Per-module switches. Edit these values in code and rebuild to switch a module
     // from Fake to Real (dependencies are created lazily once).
-    val useFakeOpenData: Boolean = true
-    val useFakeMqtt: Boolean = true
+    val useFakeOpenData: Boolean = false
+    val useFakeMqtt: Boolean = false
     val useFakeLightSensor: Boolean = false
-    val useFakeProximity: Boolean = true
-    val useFakeSpeech: Boolean = true
+    val useFakeProximity: Boolean = false
+    val useFakeSpeech: Boolean = false
     val useFakeLocation: Boolean = false
 
     /** Application-wide scope for work that must outlive a ViewModel (e.g. MQTT disconnect). */
@@ -92,8 +99,7 @@ class AppContainer(context: Context) {
         if (useFakeProximity) {
             fakeProximityStateProvider
         } else {
-            // Replace with RealProximityStateProvider(appContext)
-            fakeProximityStateProvider
+            AndroidProximityStateProvider(appContext)
         }
     }
 
@@ -124,8 +130,7 @@ class AppContainer(context: Context) {
         if (useFakeOpenData) {
             fakeOpenDataRepository
         } else {
-            // Replace with RealOpenDataRepository(appContext)
-            fakeOpenDataRepository
+            RealOpenDataRepository(context = appContext)
         }
     }
 
@@ -137,13 +142,12 @@ class AppContainer(context: Context) {
         if (useFakeMqtt) {
             fakeMqttRepository
         } else {
-            // Replace with RealMqttRepository(mqttConfig)
-            fakeMqttRepository
+            RealMqttRepository(context = appContext, config = mqttConfig, scope = applicationScope)
         }
     }
 
     val reportUseCase: ReportUseCase by lazy {
-        FakeReportUseCase(
+        SubmitFountainReportUseCase(
             lightSensorController = lightSensorController,
             mqttRepository = mqttRepository
         )
@@ -153,8 +157,7 @@ class AppContainer(context: Context) {
         if (useFakeSpeech) {
             FakeSpeechSummaryUseCase()
         } else {
-            // Replace with RealSpeechSummaryUseCase()
-            FakeSpeechSummaryUseCase()
+            RealSpeechSummaryUseCase()
         }
     }
 
@@ -162,10 +165,10 @@ class AppContainer(context: Context) {
         if (useFakeSpeech) {
             FakeSpeechController()
         } else {
-            // Replace with RealSpeechController(appContext)
-            FakeSpeechController()
+            AndroidSpeechController(appContext)
         }
     }
+
 
     val privateSpeechController: PrivateSpeechController by lazy {
         if (useFakeSpeech) {
@@ -174,10 +177,10 @@ class AppContainer(context: Context) {
                 summaryUseCase = speechSummaryUseCase
             )
         } else {
-            // Replace with RealPrivateSpeechController(proximityStateProvider, speechSummaryUseCase, speechController)
-            FakePrivateSpeechController(
+            RealPrivateSpeechController(
                 proximityStateProvider = proximityStateProvider,
-                summaryUseCase = speechSummaryUseCase
+                summaryUseCase = speechSummaryUseCase,
+                speechController = speechController
             )
         }
     }

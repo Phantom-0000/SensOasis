@@ -22,6 +22,8 @@ enum class FountainStatus {
 /**
  * Optional parsed air-quality summary near a fountain.
  */
+typealias AirQuality = AirQualitySummary
+
 data class AirQualitySummary(
     val value: Int,
     val category: String,
