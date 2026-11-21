@@ -1,30 +1,40 @@
-
 package es.upm.sensoasis.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.RateReview
-import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,18 +46,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import es.upm.sensoasis.domain.model.FountainStatus
 import es.upm.sensoasis.domain.model.ProximityState
 import es.upm.sensoasis.domain.model.SpeechState
-import es.upm.sensoasis.domain.model.formatLux
-import es.upm.sensoasis.domain.model.formatLightBand
-import es.upm.sensoasis.domain.model.formatLightQuality
-import es.upm.sensoasis.domain.model.formatObservationAge
 import es.upm.sensoasis.fake.SampleData
+import es.upm.sensoasis.ui.components.LargeLightBandBadge
+import es.upm.sensoasis.ui.components.LargeWaterStatusBadge
+import es.upm.sensoasis.ui.components.MadridHourlyTempChartCard
+import es.upm.sensoasis.ui.i18n.AppStrings
+import es.upm.sensoasis.ui.i18n.LocalAppStrings
 import es.upm.sensoasis.ui.theme.SensOasisTheme
+import es.upm.sensoasis.ui.theme.StatusBrokenBg
+import es.upm.sensoasis.ui.theme.StatusBrokenFg
 import es.upm.sensoasis.viewmodel.SensOasisUiState
 import es.upm.sensoasis.viewmodel.UiAction
+import java.util.Locale
 
 @Composable
 fun FountainDetailScreen(
@@ -57,6 +69,8 @@ fun FountainDetailScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     // Consume system Back while private speech locks the interface.
     BackHandler {
         if (!state.interactionLocked) {
@@ -66,375 +80,479 @@ fun FountainDetailScreen(
 
     val fountain = state.selectedFountain
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            OutlinedButton(
-                onClick = onNavigateBack,
-                enabled = !state.interactionLocked,
-                modifier = Modifier.heightIn(min = 48.dp)
+            // Top Navigation Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Back", fontSize = 16.sp)
-            }
-
-            Text(
-                text = "Fountain Details",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (fountain == null) {
-            Text(
-                text = "No fountain selected.",
-                fontSize = 18.sp
-            )
-            return@Column
-        }
-
-        // Fountain information
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = fountain.name,
-                    style = MaterialTheme.typography.titleLarge
-                )
-
-                Text("ID: ${fountain.id}", fontSize = 14.sp)
-
-                Text(
-                    text = "Coordinates: ${fountain.coordinates.latitude}, " +
-                            "${fountain.coordinates.longitude}",
-                    fontSize = 14.sp
-                )
-
-                Text(
-                    text = "Distance: ${
-                        state.selectedFountainDistanceMeters?.let {
-                            if (it >= 1000) {
-                                String.format(
-                                    java.util.Locale.getDefault(),
-                                    "%.1f km",
-                                    it / 1000f
-                                )
-                            } else {
-                                "$it m"
-                            }
-                        } ?: "Unknown"
-                    }",
-                    fontSize = 16.sp
-                )
-
-                StatusLine(
-                    status = fountain.officialStatus,
-                    prefix = "Official status"
-                )
-
-                state.airQuality?.let { aq ->
+                OutlinedButton(
+                    onClick = onNavigateBack,
+                    enabled = !state.interactionLocked,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Air Quality: ${aq.category} (Index ${aq.value})",
-                        fontSize = 16.sp
+                        text = strings.back,
+                        style = MaterialTheme.typography.labelLarge
                     )
                 }
-            }
-        }
 
-        // Latest community report
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
                 Text(
-                    text = "Latest Community Report",
-                    style = MaterialTheme.typography.titleMedium
+                    text = strings.fountainDetailsTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
+            }
 
-                val report = state.latestCommunityReport
-
-                if (report == null) {
+            if (fountain == null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
-                        text = "No active community report or report expired.",
-                        fontSize = 15.sp
+                        text = strings.noFountainsAvailable,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(20.dp)
                     )
-                } else {
-                    StatusLine(
-                        status = report.status,
-                        prefix = "Reported status"
-                    )
+                }
+                return@Column
+            }
 
+            // 1. Fountain Overview Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text(
-                        text = "Report age: ${
-                            formatObservationAge(report.observedAt, state.now)
-                        }",
-                        fontSize = 14.sp
+                        text = fountain.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    val light = report.lightObservation
-
-                    if (light != null) {
+                    if (fountain.address.isNotBlank()) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.LightMode,
-                                contentDescription = "Ambient light observation",
-                                modifier = Modifier.padding(end = 8.dp)
+                                imageVector = Icons.Default.Place,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
-
                             Text(
-                                text = "Ambient light observation",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
+                                text = fountain.address,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
 
-                        if (light.ambientLux != null) {
-                            Text(
-                                text = "Light level: ${formatLux(light.ambientLux)}",
-                                fontSize = 15.sp
+                    // Prominent Distance Pill
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(22.dp)
                             )
-
                             Text(
-                                text = formatLightBand(light.lightBand),
-                                fontSize = 14.sp
+                                text = state.selectedFountainDistanceMeters?.let {
+                                    strings.distanceLabel(formatDetailDistance(it))
+                                } ?: strings.distanceUnavailable,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
+                    }
 
+                    // High-Recognition Official Status Badge
+                    LargeWaterStatusBadge(
+                        status = fountain.officialStatus,
+                        prefix = strings.officialStatusPrefix
+                    )
+
+                    state.airQuality?.let { aq ->
                         Text(
-                            text = "Quality: ${formatLightQuality(light.quality)}",
-                            fontSize = 14.sp
+                            text = "${strings.airQualityPrefix}: ${aq.category} (${aq.value})",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Text(
+                        text = String.format(
+                            Locale.US,
+                            "%s: %.4f, %.4f",
+                            strings.coordinatesPrefix,
+                            fountain.coordinates.latitude,
+                            fountain.coordinates.longitude
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 2. Latest Community Report Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val report = state.latestCommunityReport
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = strings.latestCommunityReportTitle,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
                         )
 
+                        if (report != null) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(50)
+                            ) {
+                                Text(
+                                    text = strings.formatAge(report.observedAt, state.now),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (report == null) {
                         Text(
-                            text = "Light captured: ${
-                                formatObservationAge(light.observedAt, state.now)
-                            }",
-                            fontSize = 14.sp
+                            text = strings.noRecentReport,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        Text(
-                            text = "Ambient light: Not included in this report.",
-                            fontSize = 14.sp
+                        LargeWaterStatusBadge(
+                            status = report.status,
+                            prefix = strings.reportedStatusPrefix
                         )
+
+                        val light = report.lightObservation
+                        if (light != null && light.lightBand != null) {
+                            LargeLightBandBadge(
+                                band = light.lightBand,
+                                lux = light.ambientLux
+                            )
+                            Text(
+                                text = "${strings.formatQuality(light.quality)} · ${
+                                    strings.formatAge(light.observedAt, state.now)
+                                }",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Text(
+                                text = strings.sunlightNotIncluded,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // Private speech controls
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            // 3. Vico Real Open-Meteo Hourly Temperature Curve (with Local Offline Cache)
+            MadridHourlyTempChartCard(
+                coordinates = fountain.coordinates
+            )
+
+            // 4. Listen Privately Card (Everyday Phone-Call Guidance for Seniors)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (state.privateSpeechEnabled) {
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    }
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(
+                    width = if (state.privateSpeechEnabled) 2.dp else 1.dp,
+                    color = if (state.privateSpeechEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                    }
+                )
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.RecordVoiceOver,
-                                contentDescription = "Private speech",
-                                modifier = Modifier.padding(end = 6.dp)
-                            )
-
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhoneInTalk,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                                Text(
+                                    text = strings.listenPrivatelyTitle,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             Text(
-                                text = "Proximity Private Speech",
-                                style = MaterialTheme.typography.titleMedium
+                                text = strings.listenPrivatelyDesc,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
-                        Text(
-                            text = "Hear fountain details privately.",
-                            fontSize = 14.sp
+                        Switch(
+                            checked = state.privateSpeechEnabled,
+                            onCheckedChange = {
+                                onAction(UiAction.EnablePrivateSpeech(it))
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = strings.listenPrivatelyTitle
+                            }
                         )
                     }
 
-                    Switch(
-                        checked = state.privateSpeechEnabled,
-                        onCheckedChange = {
-                            onAction(UiAction.EnablePrivateSpeech(it))
-                        },
-                        modifier = Modifier.semantics {
-                            contentDescription =
-                                "Enable proximity private speech"
-                        }
-                    )
-                }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                Text(
-                    text = "Speech: ${friendlySpeech(state.speechState)}",
-                    fontSize = 14.sp
-                )
-
-                Text(
-                    text = "Proximity: ${friendlyProximity(state.proximityState)}",
-                    fontSize = 14.sp
-                )
-
-                if (state.interactionLocked) {
-                    Text(
-                        text = "Interaction locked while private speech is active.",
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-
-                    Button(
-                        onClick = {
-                            onAction(UiAction.StopSpeech)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 52.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Stop,
+                            imageVector = Icons.Default.Hearing,
                             contentDescription = null,
-                            modifier = Modifier.padding(end = 6.dp)
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
-                        Text("Stop Speech", fontSize = 16.sp)
+                        Text(
+                            text = friendlySpeech(state.speechState, strings),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Text(
+                        text = "${strings.earSensorLabel}: ${friendlyProximity(state.proximityState, strings)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    if (state.interactionLocked) {
+                        Surface(
+                            color = StatusBrokenBg,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = StatusBrokenFg,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Text(
+                                    text = strings.buttonsLockedBanner,
+                                    color = StatusBrokenFg,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = { onAction(UiAction.StopSpeech) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = StatusBrokenFg,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 54.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Stop,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = strings.stopSpeaking,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // Walking navigation and report actions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = {
-                    onAction(UiAction.OpenWalkingRoute)
-                },
-                enabled = !state.interactionLocked,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 52.dp)
+            // 5. Primary Navigation & Report Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.DirectionsWalk,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 4.dp)
-                )
-                Text("Walking Route", fontSize = 14.sp)
+                OutlinedButton(
+                    onClick = { onAction(UiAction.OpenWalkingRoute) },
+                    enabled = !state.interactionLocked,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(
+                        width = 1.5.dp,
+                        color = if (!state.interactionLocked) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        }
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.DirectionsWalk,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = strings.walkingRoute,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                Button(
+                    onClick = { onNavigateToReport(fountain.id) },
+                    enabled = !state.interactionLocked,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RateReview,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = strings.reportStatus,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
 
-            Button(
-                onClick = {
-                    onNavigateToReport(fountain.id)
-                },
-                enabled = !state.interactionLocked,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 52.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.RateReview,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 4.dp)
+            if (state.interactionLocked) {
+                Text(
+                    text = strings.unlockHint,
+                    color = StatusBrokenFg,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
                 )
-                Text("Report Status", fontSize = 14.sp)
             }
-        }
 
-        if (state.interactionLocked) {
-            Text(
-                text = "Navigation and reporting are disabled until speech stops.",
-                color = MaterialTheme.colorScheme.error,
-                fontSize = 14.sp
-            )
+            Spacer(modifier = Modifier.heightIn(min = 4.dp))
         }
     }
 }
 
-// Status icon and readable status label
-@Composable
-private fun StatusIcon(status: FountainStatus) {
-    val image = when (status) {
-        FountainStatus.WORKING -> Icons.Default.CheckCircle
-        FountainStatus.NOT_WORKING -> Icons.Default.Warning
-        FountainStatus.UNKNOWN -> Icons.Default.Info
-    }
-
-    val tint = when (status) {
-        FountainStatus.WORKING -> Color(0xFF247A45)
-        FountainStatus.NOT_WORKING -> Color(0xFFB3261E)
-        FountainStatus.UNKNOWN -> Color(0xFF555555)
-    }
-
-    val description = friendlyStatus(status)
-
-    Icon(
-        imageVector = image,
-        contentDescription = description,
-        tint = tint,
-        modifier = Modifier.padding(end = 6.dp)
-    )
+private fun formatDetailDistance(meters: Int): String = if (meters >= 1000) {
+    String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
+} else {
+    "$meters m"
 }
 
-@Composable
-private fun StatusLine(
-    status: FountainStatus,
-    prefix: String
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        StatusIcon(status)
-
-        Text(
-            text = "$prefix: ${friendlyStatus(status)}",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
+private fun friendlySpeech(state: SpeechState, strings: AppStrings): String = when (state) {
+    SpeechState.IDLE -> strings.speechOff
+    SpeechState.WAITING_FOR_NEAR -> strings.speechWaiting
+    SpeechState.SPEAKING -> strings.speechSpeaking
+    SpeechState.ERROR -> strings.speechError
 }
 
-private fun friendlyStatus(status: FountainStatus): String {
-    return when (status) {
-        FountainStatus.WORKING -> "Working"
-        FountainStatus.NOT_WORKING -> "Not Working"
-        FountainStatus.UNKNOWN -> "Unknown"
-    }
+private fun friendlyProximity(state: ProximityState, strings: AppStrings): String = when (state) {
+    ProximityState.NEAR -> strings.earNear
+    ProximityState.FAR -> strings.earFar
+    ProximityState.UNKNOWN -> strings.earReady
 }
 
-private fun friendlySpeech(state: SpeechState): String {
-    return when (state) {
-        SpeechState.IDLE -> "Off"
-        SpeechState.WAITING_FOR_NEAR ->
-            "Ready — hold phone to your ear to listen"
-        SpeechState.SPEAKING -> "Speaking privately"
-        SpeechState.ERROR -> "Speech unavailable"
-    }
-}
-
-private fun friendlyProximity(state: ProximityState): String {
-    return when (state) {
-        ProximityState.NEAR -> "Phone near ear"
-        ProximityState.FAR -> "Phone away from ear"
-        ProximityState.UNKNOWN -> "Waiting for sensor reading"
-    }
-}
-
-// Previews
 @Preview(showBackground = true)
 @Composable
 private fun FountainDetailScreenPreview() {

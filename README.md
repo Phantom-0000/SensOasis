@@ -20,10 +20,12 @@ The codebase is organized by clean package boundaries separating domain models, 
 | `es.upm.sensoasis.sensor.light` | Ambient light sensor (`TYPE_LIGHT`) short sampling window, lux-to-`LightBand` classification (`LOW` / `MODERATE` / `BRIGHT`), and cross-sensor proximity validation (`FAR` required). |
 | `es.upm.sensoasis.sensor.proximity` | Proximity sensor (`TYPE_PROXIMITY`) abstraction (`NEAR` / `FAR` / `UNKNOWN`). |
 | `es.upm.sensoasis.speech` | Private earpiece/near-ear speech playback (`PrivateSpeechController`, `SpeechSummaryUseCase`, `SpeechController`). |
-| `es.upm.sensoasis.data.opendata` | Madrid Open Data (`datos.madrid.es`) fountain dataset loading, parsing, and bundled offline asset fallback. |
+| `es.upm.sensoasis.data.opendata` | Madrid Open Data (`datos.madrid.es`) fountain dataset loading, WGS84/UTM30 parsing (including `OPERATIVO`, `FUERA_DE_SERVICIO`, and `CERRADA_TEMPORALMENT` municipal statuses), and bundled offline asset fallback. |
 | `es.upm.sensoasis.data.mqtt` | Real MQTT client (MQTTastic / `org.meshtastic:mqtt-client-*`), JSON payload serialization, retained report publishing (`QoS 1`, `retain = true`) to `sensoasis/fountains/{fountainId}/reports`, and wildcard subscription to `sensoasis/fountains/+/reports` (see `MqttTopics`). |
 | `es.upm.sensoasis.usecase` | Use-case implementations bridging sensor capture, speech summary building, and MQTT report publication. |
-| `es.upm.sensoasis.ui.*` | Jetpack Compose screens (`FountainListScreen`, `FountainDetailScreen`, `ReportScreen`), navigation host, and Material 3 theme. |
+| `es.upm.sensoasis.ui.i18n` | Instant trilingual localization (`EN` English / `ES` Español / `CA` Català) and senior text-size scaling (`A` 100% / `A+` 118%) persisted in `SharedPreferences`. |
+| `es.upm.sensoasis.ui.components` | High-recognition graphical badges (`SeniorVisualBadges`), Vico `2.1.2` hourly outdoor temperature curve card + Open-Meteo loader with local offline cache (`HourlyWeatherLoader`), and `DebugSimulationBanner`. |
+| `es.upm.sensoasis.ui.*` | Jetpack Compose screens (`HomeScreen` senior welcome hub, `FountainListScreen` with working-only filter, `FountainDetailScreen`, `ReportScreen`), single-Activity navigation host (`home -> list -> detail -> report`), and high-contrast Oasis Material 3 theme. |
 
 ---
 
@@ -68,18 +70,16 @@ These values (or lowercase `mqtt.host` / `mqtt.port`) are injected into `BuildCo
 
 ## 4. Switching Between Fakes and Real Modules (`AppContainer.kt`)
 
-During development, `AppContainer` (`app/src/main/java/es/upm/sensoasis/di/AppContainer.kt`) provides independent module switches (`useFake*`):
+In the integrated release, all six switches in `AppContainer` (`app/src/main/java/es/upm/sensoasis/di/AppContainer.kt`) default to `false` so every real sensor, GPS, Open Data, TTS, and MQTT module is active out of the box:
 
-- `useFakeOpenData = true`
-- `useFakeMqtt = true`
-- `useFakeLightSensor = false` (uses real `RealLightSensorController` with `TYPE_LIGHT` + `ProximityStateProvider` cross-check)
-- `useFakeProximity = true`
-- `useFakeSpeech = true`
-- `useFakeLocation = false` (uses real `FusedLocationProvider` with Puerta del Sol fallback)
+- `useFakeOpenData = false` (uses `RealOpenDataRepository` with live Madrid municipal JSON + bundled fallback)
+- `useFakeMqtt = false` (uses `RealMqttRepository` with MQTTastic TCP/WS client and 20-min local cache)
+- `useFakeLightSensor = false` (uses `RealLightSensorController` with `TYPE_LIGHT` + `ProximityStateProvider` cross-check)
+- `useFakeProximity = false` (uses `AndroidProximityStateProvider` with hardware `TYPE_PROXIMITY`)
+- `useFakeSpeech = false` (uses `RealPrivateSpeechController` + `AndroidSpeechController` earpiece routing)
+- `useFakeLocation = false` (uses `FusedLocationProvider` with Puerta del Sol fallback)
 
-When plugging in a real module:
-1. Implement the real class inside the corresponding package.
-2. In `AppContainer.kt`, wire the `else` branch of the module property to instantiate the real class and flip its `useFake*` flag to `false`.
+Any switch can be set back to `true` individually for deterministic local simulation or UI preview testing (which also reveals `DebugSimulationBanner` in debug builds).
 
 ---
 
@@ -102,6 +102,7 @@ Reports are UTF-8 JSON with `fountainId`, `status`, optional `lightObservation`,
 - The MQTT connection always uses the injected `MqttConfig` host, port, transport, client ID, and topic root, so the teacher VM can be selected through `MQTT_HOST` / `MQTT_PORT` in `local.properties`. No public broker address is hardcoded in `RealMqttRepository`.
 - Madrid fountain JSON is fetched from the official `300051-0-fuentes` download without credentials. Its uppercase dataset fields, WGS84 coordinates, and ETRS89 UTM fallback are parsed. On timeout, HTTP/network error, empty response, or invalid remote JSON, `RealOpenDataRepository` parses the bundled `assets/samples/fountains_sample.json` automatically.
 - Air quality uses the Open-Meteo Air Quality API `current=european_aqi`; it requires no account or API key. Parsed values are exposed as `AirQualitySummary` / `AirQuality`.
+- Hourly daytime outdoor temperature (`08h–20h` `Europe/Madrid`, `temperature_2m`) on `FountainDetailScreen` is fetched from the Open-Meteo Forecast API without an API key, rendered as a smooth cubic Vico `2.1.2` curve, and persisted in local `SharedPreferences` so the cached chart remains visible offline (`Cached · YYYY-MM-DD`).
 - Community reports are cached locally per fountain, restored on app start, and filtered against `expiresAt`; MQTT 5 message expiry removes stale retained reports from a compatible broker.
 - The MQTTastic client negotiates MQTT 5 with MQTT 3.1.1 fallback. Broker-side retained-message expiry uses MQTT 5; clients still reject expired reports from either protocol.
 - `FountainReportJsonTest` exercises valid, null-light, occluded, and expired wire payloads. The broker integration still requires two devices (or an independent MQTT publisher/subscriber) configured for the same reachable broker and topic root.

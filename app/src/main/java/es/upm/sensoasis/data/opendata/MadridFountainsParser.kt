@@ -67,8 +67,17 @@ object MadridFountainsParser {
             ?: internalCode?.let { "Fuente $it" }
             ?: "Fuente $id"
         val status = when (value("ESTADO", "officialStatus", "status")?.uppercase()) {
-            "OPERATIVO", "WORKING", "EN SERVICIO" -> FountainStatus.WORKING
-            "NO OPERATIVO", "CERRADA TEMPORALMENTE", "NOT_WORKING", "CLOSED" -> FountainStatus.NOT_WORKING
+            "OPERATIVO", "WORKING", "EN SERVICIO", "EN_SERVICIO" -> FountainStatus.WORKING
+            "NO OPERATIVO",
+            "NO_OPERATIVO",
+            "FUERA_DE_SERVICIO",
+            "FUERA DE SERVICIO",
+            "CERRADA_TEMPORALMENT",
+            "CERRADA TEMPORALMENT",
+            "CERRADA_TEMPORALMENTE",
+            "CERRADA TEMPORALMENTE",
+            "NOT_WORKING",
+            "CLOSED" -> FountainStatus.NOT_WORKING
             else -> FountainStatus.UNKNOWN
         }
         return Fountain(id, name, coordinates, status, address = address)

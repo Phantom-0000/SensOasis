@@ -6,6 +6,7 @@ package es.upm.sensoasis.ui.navigation
 object SensOasisDestinations {
     const val ARG_FOUNTAIN_ID = "fountainId"
 
+    const val HOME_ROUTE = "home"
     const val LIST_ROUTE = "list"
     const val DETAIL_ROUTE = "detail/{$ARG_FOUNTAIN_ID}"
     const val REPORT_ROUTE = "report/{$ARG_FOUNTAIN_ID}"

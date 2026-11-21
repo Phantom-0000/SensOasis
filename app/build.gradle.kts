@@ -95,6 +95,10 @@ dependencies {
     // Fused Location Services
     implementation(libs.play.services.location)
 
+    // Vico Charting Library (Material 3 Compose)
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
