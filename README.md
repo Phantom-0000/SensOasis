@@ -1,6 +1,6 @@
-# SensOasis — Urban Hydration & Shade Companion (Madrid)
+# SensOasis — Urban Hydration & Comfort Companion (Madrid)
 
-UPM Mobile Devices Programming (2026–2027) Course Project.  
+UPM Mobile Devices Programming (2026–2027) Course Project — **Team 9** (Tu Xianlong, Madiouni Nouha, Jasutkar Dhanashri, Martínez Anchuelo Adrian).  
 Target terminal: **Motorola moto g35 5G** (`minSdk = 26`, `compileSdk = 37`, `targetSdk = 37`).
 
 ---
