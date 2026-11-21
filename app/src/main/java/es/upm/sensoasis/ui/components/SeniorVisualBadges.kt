@@ -17,8 +17,8 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.NightsStay
-import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.WbCloudy
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,15 +29,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,8 +53,8 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianLayerRangeProvider
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
-import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.domain.model.FountainStatus
+import es.upm.sensoasis.domain.model.HourlyTemperatureSnapshot
 import es.upm.sensoasis.domain.model.LightBand
 import es.upm.sensoasis.domain.model.formatLux
 import es.upm.sensoasis.ui.i18n.LocalAppStrings
@@ -171,7 +167,7 @@ fun LargeWaterStatusBadge(
 
 /**
  * High-recognition graphical badge for outdoor sunlight vs shade conditions
- * (Sun ☀️ / Shade Tree 🌳 / Crescent Moon 🌙).
+ * (Sun / Shade Tree / Crescent Moon).
  */
 @Composable
 fun LargeLightBandBadge(
@@ -195,7 +191,7 @@ fun LargeLightBandBadge(
             bgColor = LightSunBg
         }
         LightBand.MODERATE -> {
-            icon = Icons.Default.Park
+            icon = Icons.Default.WbCloudy
             title = strings.lightModerateTitle
             desc = strings.lightModerateDesc
             fgColor = LightShadeFg
@@ -258,43 +254,25 @@ fun LargeLightBandBadge(
 }
 
 /**
- * Real hourly outdoor temperature curve (08h–20h Madrid time) fetched from Open-Meteo
- * (`https://api.open-meteo.com/v1/forecast?...&hourly=temperature_2m`) and persisted locally
- * in SharedPreferences so the cached curve remains visible even when the phone is offline.
+ * Stateless Vico Material 3 chart card rendering the daytime hourly outdoor temperature curve
+ * (08h–20h Madrid time) supplied by [SensOasisViewModel] via [SensOasisUiState].
  */
 @Composable
 fun MadridHourlyTempChartCard(
-    coordinates: Coordinates,
+    snapshot: HourlyTemperatureSnapshot?,
+    isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val strings = LocalAppStrings.current
-    val gridKey = remember(coordinates) { HourlyWeatherLoader.gridKey(coordinates) }
-
-    var snapshot by remember(gridKey) {
-        mutableStateOf(HourlyWeatherLoader.readCached(context, coordinates))
-    }
-    var isFetching by remember(gridKey) { mutableStateOf(snapshot == null) }
-
-    LaunchedEffect(gridKey) {
-        isFetching = snapshot == null
-        val loaded = HourlyWeatherLoader.loadOrFetch(context, coordinates)
-        if (loaded != null) {
-            snapshot = loaded
-        }
-        isFetching = false
-    }
-
     val modelProducer = remember { CartesianChartModelProducer() }
-    val currentSnapshot = snapshot
 
-    LaunchedEffect(currentSnapshot) {
-        if (currentSnapshot != null && currentSnapshot.hours.isNotEmpty()) {
+    LaunchedEffect(snapshot) {
+        if (snapshot != null && snapshot.hours.isNotEmpty()) {
             modelProducer.runTransaction {
                 lineSeries {
                     series(
-                        x = currentSnapshot.hours,
-                        y = currentSnapshot.tempsCelsius
+                        x = snapshot.hours,
+                        y = snapshot.tempsCelsius
                     )
                 }
             }
@@ -355,13 +333,13 @@ fun MadridHourlyTempChartCard(
                     )
                 }
 
-                if (currentSnapshot != null) {
-                    val badgeBg = if (currentSnapshot.isOfflineCached) {
+                if (snapshot != null) {
+                    val badgeBg = if (snapshot.isOfflineCached) {
                         StatusUnknownBg
                     } else {
                         StatusWorkingBg
                     }
-                    val badgeFg = if (currentSnapshot.isOfflineCached) {
+                    val badgeFg = if (snapshot.isOfflineCached) {
                         StatusUnknownFg
                     } else {
                         StatusWorkingFg
@@ -371,10 +349,10 @@ fun MadridHourlyTempChartCard(
                         shape = RoundedCornerShape(50)
                     ) {
                         Text(
-                            text = if (currentSnapshot.isOfflineCached) {
-                                strings.chartBadgeCached(currentSnapshot.dateLabel)
+                            text = if (snapshot.isOfflineCached) {
+                                strings.chartBadgeCached(snapshot.dateLabel)
                             } else {
-                                strings.chartBadgeLive(currentSnapshot.dateLabel)
+                                strings.chartBadgeLive(snapshot.dateLabel)
                             },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
@@ -385,13 +363,13 @@ fun MadridHourlyTempChartCard(
                 }
             }
 
-            if (currentSnapshot != null) {
-                val maxIndex = currentSnapshot.tempsCelsius.indices.maxByOrNull {
-                    currentSnapshot.tempsCelsius[it]
+            if (snapshot != null) {
+                val maxIndex = snapshot.tempsCelsius.indices.maxByOrNull {
+                    snapshot.tempsCelsius[it]
                 } ?: 0
-                val maxTemp = currentSnapshot.tempsCelsius[maxIndex].roundToInt()
-                val peakHour = currentSnapshot.hours[maxIndex]
-                val morningTemp = currentSnapshot.tempsCelsius.first().roundToInt()
+                val maxTemp = snapshot.tempsCelsius[maxIndex].roundToInt()
+                val peakHour = snapshot.hours[maxIndex]
+                val morningTemp = snapshot.tempsCelsius.first().roundToInt()
                 val isHotDay = maxTemp >= 30
                 val curveColor = if (isHotDay) StatusBrokenFg else OasisPrimary
 
@@ -441,7 +419,7 @@ fun MadridHourlyTempChartCard(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     )
                 }
-            } else if (isFetching) {
+            } else if (isLoading) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

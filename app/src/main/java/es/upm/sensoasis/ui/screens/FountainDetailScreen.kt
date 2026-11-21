@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import es.upm.sensoasis.domain.model.FountainStatus
 import es.upm.sensoasis.domain.model.ProximityState
 import es.upm.sensoasis.domain.model.SpeechState
 import es.upm.sensoasis.fake.SampleData
@@ -205,19 +206,18 @@ fun FountainDetailScreen(
                         }
                     }
 
-                    // High-Recognition Official Status Badge
-                    LargeWaterStatusBadge(
-                        status = fountain.officialStatus,
-                        prefix = strings.officialStatusPrefix
-                    )
+                    val activeReport = state.latestCommunityReport?.takeIf { !it.isExpired(state.now) }
+                    val effectiveStatus = activeReport?.status?.takeIf { it != FountainStatus.UNKNOWN }
+                        ?: fountain.officialStatus
 
-                    state.airQuality?.let { aq ->
-                        Text(
-                            text = "${strings.airQualityPrefix}: ${aq.category} (${aq.value})",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    // High-Recognition Effective Status Badge (aligned with Home & List screens)
+                    LargeWaterStatusBadge(status = effectiveStatus)
+
+                    Text(
+                        text = "${strings.officialStatusPrefix}: ${strings.formatStatusName(fountain.officialStatus)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     Text(
                         text = String.format(
@@ -247,7 +247,7 @@ fun FountainDetailScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    val report = state.latestCommunityReport
+                    val report = state.latestCommunityReport?.takeIf { !it.isExpired(state.now) }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -314,7 +314,8 @@ fun FountainDetailScreen(
 
             // 3. Vico Real Open-Meteo Hourly Temperature Curve (with Local Offline Cache)
             MadridHourlyTempChartCard(
-                coordinates = fountain.coordinates
+                snapshot = state.hourlyTemperature,
+                isLoading = state.isLoadingHourlyTemperature
             )
 
             // 4. Listen Privately Card (Everyday Phone-Call Guidance for Seniors)
@@ -389,6 +390,7 @@ fun FountainDetailScreen(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+                    val isSpeechError = state.speechState == SpeechState.ERROR
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -396,14 +398,22 @@ fun FountainDetailScreen(
                         Icon(
                             imageVector = Icons.Default.Hearing,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (isSpeechError) {
+                                StatusBrokenFg
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
                             text = friendlySpeech(state.speechState, strings),
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = if (isSpeechError) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSpeechError) {
+                                StatusBrokenFg
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         )
                     }
 

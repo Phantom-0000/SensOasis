@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Stop
@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.sp
 import es.upm.sensoasis.domain.model.FountainStatus
 import es.upm.sensoasis.domain.model.LightCaptureResult
 import es.upm.sensoasis.domain.model.formatLux
-import es.upm.sensoasis.domain.model.formatUnavailableReason
 import es.upm.sensoasis.fake.SampleData
 import es.upm.sensoasis.ui.i18n.AppStrings
 import es.upm.sensoasis.ui.i18n.LocalAppStrings
@@ -152,13 +151,13 @@ private fun ReportPortraitLayout(
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = strings.cancel,
+                    text = strings.back,
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1
                 )
@@ -241,13 +240,13 @@ private fun ReportLandscapeLayout(
                 modifier = Modifier.heightIn(min = 40.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = strings.cancel,
+                    text = strings.back,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
@@ -395,7 +394,7 @@ private fun StatusSelectionCard(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = if (isLandscape) 44.dp else 56.dp)
+                        .heightIn(min = if (isLandscape) 48.dp else 56.dp)
                         .clickable(
                             enabled = !interactionLocked,
                             role = Role.RadioButton,
@@ -539,7 +538,7 @@ private fun AmbientLightCard(
                     StatusBrokenFg
                 )
                 is LightCaptureResult.Unavailable -> Triple(
-                    strings.lightUnavailableMsg(formatUnavailableReason(light.reason)),
+                    strings.lightUnavailableMsg(strings.formatSensorReason(light.reason, state.language)),
                     MaterialTheme.colorScheme.surfaceVariant,
                     MaterialTheme.colorScheme.onSurfaceVariant
                 )

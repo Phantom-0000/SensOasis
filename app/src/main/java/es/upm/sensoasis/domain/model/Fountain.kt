@@ -1,7 +1,5 @@
 package es.upm.sensoasis.domain.model
 
-import java.time.Instant
-
 /**
  * Geographic coordinates in WGS84 decimal degrees.
  */
@@ -20,17 +18,6 @@ enum class FountainStatus {
 }
 
 /**
- * Optional parsed air-quality summary near a fountain.
- */
-typealias AirQuality = AirQualitySummary
-
-data class AirQualitySummary(
-    val value: Int,
-    val category: String,
-    val observedAt: Instant
-)
-
-/**
  * Public drinking fountain domain model.
  * Note: [id] must not contain '/' so MQTT topics remain well-formed.
  */
@@ -39,7 +26,6 @@ data class Fountain(
     val name: String,
     val coordinates: Coordinates,
     val officialStatus: FountainStatus,
-    val airQuality: AirQualitySummary? = null,
     val address: String = ""
 ) {
     init {

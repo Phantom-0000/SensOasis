@@ -4,6 +4,7 @@ import es.upm.sensoasis.domain.contract.PrivateSpeechController
 import es.upm.sensoasis.domain.contract.ProximityStateProvider
 import es.upm.sensoasis.domain.contract.SpeechController
 import es.upm.sensoasis.domain.contract.SpeechSummaryUseCase
+import es.upm.sensoasis.domain.model.AppLanguage
 import es.upm.sensoasis.domain.model.ProximityState
 import es.upm.sensoasis.domain.model.SpeechState
 import es.upm.sensoasis.domain.model.SpeechSummaryInput
@@ -19,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Fake implementation of [SpeechSummaryUseCase] producing a readable English spoken summary.
+ * Fake implementation of [SpeechSummaryUseCase] producing a readable spoken summary.
  */
 class FakeSpeechSummaryUseCase : SpeechSummaryUseCase {
     override fun buildSummary(input: SpeechSummaryInput): SpeechText {
@@ -32,11 +33,11 @@ class FakeSpeechSummaryUseCase : SpeechSummaryUseCase {
             } ?: ""
             "Latest community report ($age minutes ago): ${report.status.name.lowercase().replace('_', ' ')}$lightInfo."
         } ?: "No recent community reports."
-        val airPart = input.airQuality?.let { "Air quality is ${it.category.lowercase()}." } ?: ""
         return SpeechText(
-            listOf(input.fountain.name + ".", distancePart, officialPart, communityPart, airPart)
+            value = listOf(input.fountain.name + ".", distancePart, officialPart, communityPart)
                 .filter { it.isNotBlank() }
-                .joinToString(" ")
+                .joinToString(" "),
+            language = input.language
         )
     }
 }
@@ -44,33 +45,50 @@ class FakeSpeechSummaryUseCase : SpeechSummaryUseCase {
 /**
  * Fake implementation of low-level [SpeechController].
  */
-class FakeSpeechController : SpeechController {
+class FakeSpeechController(
+    var supportedLanguages: Set<AppLanguage> = AppLanguage.entries.toSet()
+) : SpeechController {
     private val _state = MutableStateFlow(SpeechState.IDLE)
     override val state: StateFlow<SpeechState> = _state.asStateFlow()
+
+    var currentLanguage: AppLanguage = AppLanguage.EN
+        private set
 
     var lastSpokenText: SpeechText? = null
         private set
 
+    var stopCallCount: Int = 0
+        private set
+
+    override fun setLanguage(language: AppLanguage) {
+        currentLanguage = language
+        if (language !in supportedLanguages) {
+            _state.value = SpeechState.ERROR
+        } else if (_state.value == SpeechState.ERROR) {
+            _state.value = SpeechState.IDLE
+        }
+    }
+
     override fun speak(text: SpeechText) {
+        currentLanguage = text.language
+        if (text.language !in supportedLanguages) {
+            _state.value = SpeechState.ERROR
+            return
+        }
         lastSpokenText = text
         _state.value = SpeechState.SPEAKING
     }
 
     override fun stop() {
-        _state.value = SpeechState.IDLE
+        stopCallCount++
+        if (_state.value != SpeechState.ERROR) {
+            _state.value = SpeechState.IDLE
+        }
     }
 }
 
 /**
  * Fake implementation of [PrivateSpeechController].
- *
- * State transition loop when enabled (`privateSpeechEnabled = true`):
- * - Starts in [SpeechState.WAITING_FOR_NEAR].
- * - When [ProximityStateProvider.state] transitions to [ProximityState.NEAR], enters [SpeechState.SPEAKING]
- *   for [simulatedUtteranceDurationMs] (or until [ProximityState.FAR] / [stop] is called).
- * - Does not re-trigger while remaining in the same [ProximityState.NEAR] gesture.
- * - Returns to [SpeechState.WAITING_FOR_NEAR] after playback finishes or is stopped while still enabled.
- * - Returns to [SpeechState.IDLE] when [disable] is called.
  */
 class FakePrivateSpeechController(
     private val proximityStateProvider: ProximityStateProvider,

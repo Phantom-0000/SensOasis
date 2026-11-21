@@ -1,10 +1,10 @@
 package es.upm.sensoasis.fake
 
 import es.upm.sensoasis.domain.contract.OpenDataRepository
-import es.upm.sensoasis.domain.model.AirQualitySummary
 import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.domain.model.DataResult
 import es.upm.sensoasis.domain.model.Fountain
+import es.upm.sensoasis.domain.model.HourlyTemperatureSnapshot
 import kotlinx.coroutines.delay
 
 /**
@@ -13,7 +13,8 @@ import kotlinx.coroutines.delay
 class FakeOpenDataRepository(
     var simulatedDelayMs: Long = 250L,
     var fountainsResult: DataResult<List<Fountain>> = DataResult.Success(SampleData.fountains),
-    var airQualityResult: DataResult<AirQualitySummary> = DataResult.Success(SampleData.sampleAirQualityGood)
+    var hourlyTemperatureResult: DataResult<HourlyTemperatureSnapshot> =
+        DataResult.Success(SampleData.sampleHourlyTemperature)
 ) : OpenDataRepository {
 
     override suspend fun getFountains(): DataResult<List<Fountain>> {
@@ -21,8 +22,8 @@ class FakeOpenDataRepository(
         return fountainsResult
     }
 
-    override suspend fun getAirQuality(location: Coordinates): DataResult<AirQualitySummary> {
+    override suspend fun getHourlyTemperature(location: Coordinates): DataResult<HourlyTemperatureSnapshot> {
         if (simulatedDelayMs > 0) delay(simulatedDelayMs / 2)
-        return airQualityResult
+        return hourlyTemperatureResult
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.DisposableEffect
@@ -29,13 +30,16 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import es.upm.sensoasis.domain.model.AppLanguage
 import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.ui.components.DebugSimulationBanner
+import es.upm.sensoasis.ui.i18n.LocalAppPreferences
 import es.upm.sensoasis.ui.navigation.SensOasisNavHost
 import es.upm.sensoasis.ui.theme.SensOasisTheme
 import es.upm.sensoasis.viewmodel.SensOasisViewModel
 import es.upm.sensoasis.viewmodel.UiAction
 import es.upm.sensoasis.viewmodel.UiEffect
+import kotlinx.coroutines.launch
 
 /**
  * Single Activity entry point hosting [SensOasisNavHost] and collecting one-time [UiEffect]s.
@@ -55,6 +59,11 @@ class MainActivity : ComponentActivity() {
                 )
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 val snackbarHostState = remember { SnackbarHostState() }
+                val appPrefs = LocalAppPreferences.current
+
+                LaunchedEffect(appPrefs.language) {
+                    viewModel.onAction(UiAction.SetLanguage(appPrefs.language))
+                }
 
                 val locationPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -103,14 +112,27 @@ class MainActivity : ComponentActivity() {
                     viewModel.effects.collect { effect ->
                         when (effect) {
                             is UiEffect.ShowMessage -> {
-                                snackbarHostState.showSnackbar(effect.message)
+                                launch {
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    snackbarHostState.showSnackbar(
+                                        message = effect.message,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
                             }
                             is UiEffect.OpenWalkingRoute -> {
                                 launchWalkingNavigation(
                                     destination = effect.destination,
-                                    label = effect.fountainName
+                                    label = effect.fountainName,
+                                    language = viewModel.uiState.value.language
                                 ) { errorMessage ->
-                                    snackbarHostState.showSnackbar(errorMessage)
+                                    launch {
+                                        snackbarHostState.currentSnackbarData?.dismiss()
+                                        snackbarHostState.showSnackbar(
+                                            message = errorMessage,
+                                            duration = SnackbarDuration.Short
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -149,6 +171,7 @@ class MainActivity : ComponentActivity() {
     private suspend fun launchWalkingNavigation(
         destination: Coordinates,
         label: String,
+        language: AppLanguage,
         onError: suspend (String) -> Unit
     ) {
         val uri = Uri.parse(
@@ -158,7 +181,12 @@ class MainActivity : ComponentActivity() {
         try {
             startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            onError("No map application installed for walking navigation.")
+            val msg = when (language) {
+                AppLanguage.EN -> "No map application installed for walking navigation."
+                AppLanguage.ES -> "No hay ninguna aplicación de mapas instalada para ir caminando."
+                AppLanguage.CA -> "No hi ha cap aplicació de mapes instal·lada per anar-hi caminant."
+            }
+            onError(msg)
         }
     }
 }

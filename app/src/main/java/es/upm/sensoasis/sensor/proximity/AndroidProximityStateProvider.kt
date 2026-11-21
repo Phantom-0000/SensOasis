@@ -30,9 +30,6 @@ class AndroidProximityStateProvider(
     override val state: StateFlow<ProximityState> =
         _state.asStateFlow()
 
-    private val _availability =
-        MutableStateFlow(SensorAvailability.UNAVAILABLE)
-
     override val availability: SensorAvailability =
         if (proximitySensor != null) SensorAvailability.AVAILABLE
         else SensorAvailability.UNAVAILABLE
@@ -40,14 +37,7 @@ class AndroidProximityStateProvider(
     override fun start() {
         _state.value = ProximityState.UNKNOWN
 
-        val sensor = proximitySensor
-
-        if (sensor == null) {
-            _availability.value = SensorAvailability.UNAVAILABLE
-            return
-        }
-
-        _availability.value = SensorAvailability.AVAILABLE
+        val sensor = proximitySensor ?: return
 
         sensorManager.registerListener(
             this,
@@ -64,13 +54,15 @@ class AndroidProximityStateProvider(
     override fun onSensorChanged(event: SensorEvent?) {
         val sensor = proximitySensor ?: return
 
-        if (event == null || event.values.isEmpty()) return
+        if (event == null || event.sensor?.type != Sensor.TYPE_PROXIMITY || event.values.isEmpty()) {
+            return
+        }
 
-        _state.value = if (event.values[0] < proximitySensor.maximumRange) {
-                ProximityState.NEAR
-            } else {
-                ProximityState.FAR
-            }
+        _state.value = if (event.values[0] < sensor.maximumRange) {
+            ProximityState.NEAR
+        } else {
+            ProximityState.FAR
+        }
     }
 
     override fun onAccuracyChanged(

@@ -11,6 +11,7 @@ import es.upm.sensoasis.domain.contract.OpenDataRepository
 import es.upm.sensoasis.domain.contract.PrivateSpeechController
 import es.upm.sensoasis.domain.contract.ProximityStateProvider
 import es.upm.sensoasis.domain.contract.ReportUseCase
+import es.upm.sensoasis.domain.model.AppLanguage
 import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.Constants
 import es.upm.sensoasis.domain.model.Coordinates
@@ -37,15 +38,16 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 
 /**
  * Main application ViewModel orchestrating:
- * - Fountain open-data loading and selection
+ * - Fountain open-data loading, selection, and hourly temperature curve loading
  * - MQTT broker lifecycle and community report subscription + active expiry filtering
  * - Two-phase ambient-light capture and report submission
  * - Proximity sensor lifecycle ownership (`needProximity = reportScreenActive || privateSpeechEnabled`)
- * - Private speech coordination (`PrivateSpeechController`)
+ * - Trilingual private speech coordination (`PrivateSpeechController`)
  * - Interaction lock derivation (`privateSpeechEnabled && (proximity == NEAR || speech == SPEAKING)`)
  * - One-time UI effects via [effects] channel
  */
@@ -77,7 +79,8 @@ class SensOasisViewModel(
     private var wasProximityNeeded: Boolean = false
     private var isAppInBackground: Boolean = false
     private var captureJob: Job? = null
-    private var airQualityJob: Job? = null
+    private var fountainsJob: Job? = null
+    private var weatherJob: Job? = null
 
     /**
      * Fountain id requested via [UiAction.SelectFountain] before the fountain list finished loading
@@ -101,6 +104,7 @@ class SensOasisViewModel(
     fun onAction(action: UiAction) {
         when (action) {
             is UiAction.SelectFountain -> selectFountain(action.fountainId)
+            is UiAction.SetLanguage -> setLanguage(action.language)
             UiAction.OpenReport -> openReport()
             UiAction.CaptureLight -> captureLight()
             is UiAction.ChangeFountainStatus -> changeDraftStatus(action.status)
@@ -113,6 +117,12 @@ class SensOasisViewModel(
             UiAction.RefreshLocation -> refreshLocation()
             UiAction.ClearError -> _uiState.update { it.copy(error = null) }
         }
+    }
+
+    private fun setLanguage(language: AppLanguage) {
+        if (_uiState.value.language == language) return
+        _uiState.update { it.copy(language = language) }
+        syncDerivedState()
     }
 
     /**
@@ -160,8 +170,9 @@ class SensOasisViewModel(
         refreshLocation()
     }
 
-    private fun loadFountains() {
-        viewModelScope.launch {
+    private fun loadFountains(notifyUser: Boolean = false) {
+        fountainsJob?.cancel()
+        fountainsJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingFountains = true, error = null) }
             when (val result = openDataRepository.getFountains()) {
                 is DataResult.Success -> {
@@ -192,20 +203,32 @@ class SensOasisViewModel(
                             fountainDistancesMeters = distances,
                             selectedFountainDistanceMeters = selectedDist,
                             latestCommunityReport = latestForSelected,
-                            airQuality = selected?.airQuality,
                             reportDraftStatus = updatedDraftStatus
                         )
                     }
                     syncDerivedState()
-                    _uiState.value.selectedFountain?.let(::loadAirQuality)
+                    _uiState.value.selectedFountain?.let(::loadHourlyTemperature)
+                    if (notifyUser) {
+                        val count = list.size
+                        val msg = when (_uiState.value.language) {
+                            AppLanguage.EN -> "Refreshed ($count fountains)"
+                            AppLanguage.ES -> "Datos actualizados ($count fuentes)"
+                            AppLanguage.CA -> "Dades actualitzades ($count fonts)"
+                        }
+                        _effects.send(UiEffect.ShowMessage(msg))
+                    }
                 }
 
                 is DataResult.Unavailable -> {
+                    val errMsg = "Fountain data unavailable: ${result.reason}"
                     _uiState.update {
                         it.copy(
                             isLoadingFountains = false,
-                            error = "Fountain data unavailable: ${result.reason}"
+                            error = errMsg
                         )
+                    }
+                    if (notifyUser) {
+                        _effects.send(UiEffect.ShowMessage(errMsg))
                     }
                 }
 
@@ -216,13 +239,16 @@ class SensOasisViewModel(
                             error = result.message
                         )
                     }
+                    if (notifyUser) {
+                        _effects.send(UiEffect.ShowMessage(result.message))
+                    }
                 }
             }
         }
     }
 
     private fun refreshFountains() {
-        loadFountains()
+        loadFountains(notifyUser = true)
         val mqtt = _uiState.value.mqttState
         if (mqtt == ConnectionState.DISCONNECTED || mqtt == ConnectionState.ERROR) {
             connectMqtt()
@@ -327,38 +353,36 @@ class SensOasisViewModel(
                 selectedFountain = found,
                 selectedFountainDistanceMeters = dist,
                 latestCommunityReport = report,
-                airQuality = found.airQuality,
                 reportDraftStatus = found.officialStatus.takeIf { it != FountainStatus.UNKNOWN }
                     ?: FountainStatus.WORKING
             )
         }
         syncDerivedState()
-        _uiState.value.selectedFountain?.let(::loadAirQuality)
+        _uiState.value.selectedFountain?.let(::loadHourlyTemperature)
     }
 
-    private fun loadAirQuality(fountain: Fountain) {
-        airQualityJob?.cancel()
-        airQualityJob = viewModelScope.launch {
-            when (val result = openDataRepository.getAirQuality(fountain.coordinates)) {
+    private fun loadHourlyTemperature(fountain: Fountain) {
+        weatherJob?.cancel()
+        weatherJob = viewModelScope.launch {
+            _uiState.update { current ->
+                current.copy(isLoadingHourlyTemperature = current.hourlyTemperature == null)
+            }
+            when (val result = openDataRepository.getHourlyTemperature(fountain.coordinates)) {
                 is DataResult.Success -> {
                     _uiState.update { current ->
-                        val updatedFountains = current.fountains.map { item ->
-                            if (item.id == fountain.id) item.copy(airQuality = result.value) else item
-                        }
                         if (current.selectedFountain?.id == fountain.id) {
-                            val updatedSelected = current.selectedFountain.copy(airQuality = result.value)
                             current.copy(
-                                fountains = updatedFountains,
-                                selectedFountain = updatedSelected,
-                                airQuality = result.value
+                                hourlyTemperature = result.value,
+                                isLoadingHourlyTemperature = false
                             )
                         } else {
-                            current.copy(fountains = updatedFountains)
+                            current.copy(isLoadingHourlyTemperature = false)
                         }
                     }
-                    syncDerivedState()
                 }
-                is DataResult.Unavailable, is DataResult.Error -> Unit
+                is DataResult.Unavailable, is DataResult.Error -> {
+                    _uiState.update { it.copy(isLoadingHourlyTemperature = false) }
+                }
             }
         }
     }
@@ -423,37 +447,56 @@ class SensOasisViewModel(
             _uiState.update { it.copy(reportState = ReportFlowState.PUBLISHING, error = null) }
             val mqtt = _uiState.value.mqttState
             if (mqtt == ConnectionState.DISCONNECTED || mqtt == ConnectionState.ERROR) {
-                mqttRepository.connect()
+                withTimeoutOrNull(PUBLISH_TIMEOUT_MS) {
+                    mqttRepository.connect()
+                }
             }
-            val result = reportUseCase.submitReport(
-                fountainId = fountain.id,
-                status = current.reportDraftStatus,
-                lightObservation = current.submittableLightObservation
-            )
+            val result = withTimeoutOrNull(PUBLISH_TIMEOUT_MS) {
+                reportUseCase.submitReport(
+                    fountainId = fountain.id,
+                    status = current.reportDraftStatus,
+                    lightObservation = current.submittableLightObservation
+                )
+            } ?: SubmitReportResult.Offline
             when (result) {
                 SubmitReportResult.Success -> {
                     _uiState.update { it.copy(reportState = ReportFlowState.PUBLISHED, now = nowProvider()) }
-                    _effects.send(UiEffect.ShowMessage("Report published for ${fountain.name}"))
+                    val msg = when (_uiState.value.language) {
+                        AppLanguage.EN -> "Report published for ${fountain.name}"
+                        AppLanguage.ES -> "Aviso enviado para ${fountain.name}"
+                        AppLanguage.CA -> "Avís enviat per a ${fountain.name}"
+                    }
+                    _effects.send(UiEffect.ShowMessage(msg))
                 }
 
                 SubmitReportResult.Offline -> {
+                    val (errText, toastText) = when (_uiState.value.language) {
+                        AppLanguage.EN -> "Broker offline: could not publish report" to "Offline: could not publish report"
+                        AppLanguage.ES -> "Sin conexión al servidor: no se pudo enviar el aviso" to "Sin conexión: no se pudo enviar el aviso"
+                        AppLanguage.CA -> "Sense connexió al servidor: no s'ha pogut enviar l'avís" to "Sense connexió: no s'ha pogut enviar l'avís"
+                    }
                     _uiState.update {
                         it.copy(
                             reportState = ReportFlowState.OFFLINE,
-                            error = "Broker offline: could not publish report"
+                            error = errText
                         )
                     }
-                    _effects.send(UiEffect.ShowMessage("Offline: could not publish report"))
+                    _effects.send(UiEffect.ShowMessage(toastText))
                 }
 
                 is SubmitReportResult.Error -> {
+                    val prefix = when (_uiState.value.language) {
+                        AppLanguage.EN -> "Error"
+                        AppLanguage.ES -> "Error"
+                        AppLanguage.CA -> "Error"
+                    }
                     _uiState.update {
                         it.copy(
                             reportState = ReportFlowState.ERROR,
                             error = result.message
                         )
                     }
-                    _effects.send(UiEffect.ShowMessage("Error: ${result.message}"))
+                    _effects.send(UiEffect.ShowMessage("$prefix: ${result.message}"))
                 }
             }
             syncDerivedState()
@@ -534,8 +577,9 @@ class SensOasisViewModel(
             wasProximityNeeded = false
         }
 
-        // Interaction lock formula while private speech is active
+        // Interaction lock formula while private speech is active (never lock on ERROR)
         val locked = snapshot.privateSpeechEnabled &&
+            snapshot.speechState != SpeechState.ERROR &&
             (snapshot.proximityState == ProximityState.NEAR || snapshot.speechState == SpeechState.SPEAKING)
 
         if (snapshot.interactionLocked != locked) {
@@ -550,10 +594,10 @@ class SensOasisViewModel(
                 fountain = fountain,
                 officialStatus = fountain.officialStatus,
                 communityReport = currentAfterLock.latestCommunityReport,
-                airQuality = currentAfterLock.airQuality,
                 lightObservation = currentAfterLock.latestCommunityReport?.lightObservation
                     ?: currentAfterLock.submittableLightObservation,
                 distanceMeters = currentAfterLock.selectedFountainDistanceMeters,
+                language = currentAfterLock.language,
                 now = currentAfterLock.now
             )
         }
@@ -580,6 +624,8 @@ class SensOasisViewModel(
         super.onCleared()
         captureJob?.cancel()
         captureJob = null
+        weatherJob?.cancel()
+        weatherJob = null
         privateSpeechController.disable()
         if (wasProximityNeeded) {
             proximityStateProvider.stop()
@@ -591,6 +637,8 @@ class SensOasisViewModel(
     }
 
     companion object {
+        private const val PUBLISH_TIMEOUT_MS: Long = 5_000L
+
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

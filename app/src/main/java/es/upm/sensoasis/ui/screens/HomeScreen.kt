@@ -52,13 +52,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import es.upm.sensoasis.domain.model.AppLanguage
 import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.FountainStatus
 import es.upm.sensoasis.fake.SampleData
 import es.upm.sensoasis.ui.components.LargeLightBandBadge
 import es.upm.sensoasis.ui.components.LargeWaterStatusBadge
 import es.upm.sensoasis.ui.i18n.AppFontScale
-import es.upm.sensoasis.ui.i18n.AppLanguage
 import es.upm.sensoasis.ui.i18n.LocalAppPreferences
 import es.upm.sensoasis.ui.i18n.LocalAppStrings
 import es.upm.sensoasis.ui.theme.SensOasisTheme
@@ -94,6 +94,7 @@ fun HomeScreen(
     // Pick the nearest fountain whose effective status is WORKING (fallback to closest overall).
     val nearestWorking = state.fountains.firstOrNull { fountain ->
         val reported = state.communityReportsByFountain[fountain.id]
+            ?.takeIf { !it.isExpired(state.now) }
             ?.status
             ?.takeIf { it != FountainStatus.UNKNOWN }
         (reported ?: fountain.officialStatus) == FountainStatus.WORKING
@@ -159,14 +160,23 @@ fun HomeScreen(
                         onAction(UiAction.RefreshFountains)
                         onAction(UiAction.RefreshLocation)
                     },
+                    enabled = !state.isLoadingFountains,
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = strings.refresh,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp)
-                    )
+                    if (state.isLoadingFountains) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = strings.refresh,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
                 }
             }
 
@@ -351,6 +361,7 @@ fun HomeScreen(
                     } else {
                         val distance = state.fountainDistancesMeters[featuredFountain.id]
                         val report = state.communityReportsByFountain[featuredFountain.id]
+                            ?.takeIf { !it.isExpired(state.now) }
                         val effectiveStatus = report?.status?.takeIf { it != FountainStatus.UNKNOWN }
                             ?: featuredFountain.officialStatus
 

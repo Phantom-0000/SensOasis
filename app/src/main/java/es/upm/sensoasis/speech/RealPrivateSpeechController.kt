@@ -4,6 +4,7 @@ import es.upm.sensoasis.domain.contract.PrivateSpeechController
 import es.upm.sensoasis.domain.contract.ProximityStateProvider
 import es.upm.sensoasis.domain.contract.SpeechController
 import es.upm.sensoasis.domain.contract.SpeechSummaryUseCase
+import es.upm.sensoasis.domain.model.Constants
 import es.upm.sensoasis.domain.model.ProximityState
 import es.upm.sensoasis.domain.model.SpeechState
 import es.upm.sensoasis.domain.model.SpeechSummaryInput
@@ -17,17 +18,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Real implementation of PrivateSpeechController.
+ * Real implementation of [PrivateSpeechController].
  *
  * Handles proximity-based private speech activation:
- * - NEAR must remain stable for 2 seconds.
- * - FAR must remain stable for 400 milliseconds.
+ * - Pre-checks selected language pack availability immediately on [enable] and language changes.
+ * - NEAR must remain stable for [Constants.PROXIMITY_NEAR_TRIGGER_MS] (2.0 seconds).
+ * - FAR must remain stable for [Constants.PROXIMITY_FAR_STOP_MS] (400 milliseconds).
  * - Only one summary is triggered per continuous NEAR gesture.
- * - UNKNOWN never triggers speech.
+ * - Preserves [SpeechState.ERROR] across FAR events when TTS or a language pack is unavailable,
+ *   and always cancels pending/starting playback when moving away to FAR.
  *
  * Proximity sensor lifecycle remains managed by the ViewModel.
  */
@@ -38,11 +44,6 @@ class RealPrivateSpeechController(
     private val scope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
 ) : PrivateSpeechController {
-
-    companion object {
-        private const val NEAR_DEBOUNCE_MS = 2_000L
-        private const val FAR_DEBOUNCE_MS = 400L
-    }
 
     private val _state = MutableStateFlow(SpeechState.IDLE)
 
@@ -56,6 +57,7 @@ class RealPrivateSpeechController(
 
     private var monitorJob: Job? = null
     private var speechStateJob: Job? = null
+    private var languageJob: Job? = null
 
     override fun enable(inputFlow: StateFlow<SpeechSummaryInput?>) {
         if (isEnabled) return
@@ -63,7 +65,27 @@ class RealPrivateSpeechController(
         isEnabled = true
         hasTriggeredForCurrentNear = false
 
-        _state.value = SpeechState.WAITING_FOR_NEAR
+        // Pre-validate the currently selected language immediately so missing voice packs
+        // surface SpeechState.ERROR right away without waiting 2s at the ear.
+        inputFlow.value?.language?.let(speechController::setLanguage)
+        _state.value = if (speechController.state.value == SpeechState.ERROR) {
+            SpeechState.ERROR
+        } else {
+            SpeechState.WAITING_FOR_NEAR
+        }
+
+        // Keep TTS engine locale synchronized whenever the user switches EN / ES / CA.
+        languageJob?.cancel()
+        languageJob = scope.launch {
+            inputFlow
+                .map { it?.language }
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { language ->
+                    if (!isEnabled) return@collect
+                    speechController.setLanguage(language)
+                }
+        }
 
         // Observe the low-level TTS state.
         speechStateJob?.cancel()
@@ -92,58 +114,48 @@ class RealPrivateSpeechController(
         monitorJob?.cancel()
         monitorJob = scope.launch {
             proximityStateProvider.state.collectLatest { proximity ->
-
                 if (!isEnabled) return@collectLatest
 
                 when (proximity) {
-
                     ProximityState.NEAR -> {
-
                         if (
                             !hasTriggeredForCurrentNear &&
-                            _state.value != SpeechState.ERROR
+                            _state.value != SpeechState.ERROR &&
+                            speechController.state.value != SpeechState.ERROR
                         ) {
-                            // Require continuous NEAR for 2 seconds.
-                            delay(NEAR_DEBOUNCE_MS)
+                            delay(Constants.PROXIMITY_NEAR_TRIGGER_MS)
 
                             if (
                                 !isEnabled ||
-                                proximityStateProvider.state.value !=
-                                ProximityState.NEAR
+                                proximityStateProvider.state.value != ProximityState.NEAR ||
+                                speechController.state.value == SpeechState.ERROR
                             ) {
                                 return@collectLatest
                             }
 
                             try {
-                                // Wait until valid summary data is available.
                                 val input = inputFlow.first { it != null }
                                     ?: return@collectLatest
 
                                 if (
                                     !isEnabled ||
-                                    proximityStateProvider.state.value !=
-                                    ProximityState.NEAR
+                                    proximityStateProvider.state.value != ProximityState.NEAR
                                 ) {
                                     return@collectLatest
                                 }
 
-                                // Prevent repeated triggers during this NEAR gesture.
                                 hasTriggeredForCurrentNear = true
-
-                                val summary =
-                                    summaryUseCase.buildSummary(input)
+                                val summary = summaryUseCase.buildSummary(input)
 
                                 if (
                                     isEnabled &&
-                                    proximityStateProvider.state.value ==
-                                    ProximityState.NEAR
+                                    proximityStateProvider.state.value == ProximityState.NEAR
                                 ) {
                                     speechController.speak(summary)
                                 }
-
                             } catch (exception: CancellationException) {
                                 throw exception
-                            } catch (exception: Exception) {
+                            } catch (_: Exception) {
                                 if (isEnabled) {
                                     hasTriggeredForCurrentNear = true
                                     _state.value = SpeechState.ERROR
@@ -153,32 +165,30 @@ class RealPrivateSpeechController(
                     }
 
                     ProximityState.FAR -> {
-
-                        // Require continuous FAR for 400 milliseconds.
-                        delay(FAR_DEBOUNCE_MS)
+                        delay(Constants.PROXIMITY_FAR_STOP_MS)
 
                         if (
                             isEnabled &&
-                            proximityStateProvider.state.value ==
-                            ProximityState.FAR
+                            proximityStateProvider.state.value == ProximityState.FAR
                         ) {
-                            // A new NEAR gesture can now trigger another summary.
                             hasTriggeredForCurrentNear = false
 
-                            if (
-                                speechController.state.value ==
-                                SpeechState.SPEAKING
-                            ) {
-                                speechController.stop()
-                            }
+                            // Always invoke stop() to clear both active playback AND queued/pending
+                            // utterances that have not yet delivered UtteranceProgressListener.onStart().
+                            speechController.stop()
 
-                            _state.value = SpeechState.WAITING_FOR_NEAR
+                            // Preserve ERROR when TTS or the selected voice pack is unavailable.
+                            if (
+                                speechController.state.value != SpeechState.ERROR &&
+                                _state.value != SpeechState.ERROR
+                            ) {
+                                _state.value = SpeechState.WAITING_FOR_NEAR
+                            }
                         }
                     }
 
                     ProximityState.UNKNOWN -> {
-                        // UNKNOWN never triggers speech.
-                        // collectLatest cancels any pending NEAR/FAR debounce.
+                        // UNKNOWN never triggers speech; collectLatest cancels pending debounces.
                     }
                 }
             }
@@ -192,10 +202,13 @@ class RealPrivateSpeechController(
     override fun stop() {
         speechController.stop()
 
-        if (isEnabled) {
-            _state.value = SpeechState.WAITING_FOR_NEAR
-        } else {
+        if (!isEnabled) {
             _state.value = SpeechState.IDLE
+        } else if (
+            speechController.state.value != SpeechState.ERROR &&
+            _state.value != SpeechState.ERROR
+        ) {
+            _state.value = SpeechState.WAITING_FOR_NEAR
         }
     }
 
@@ -211,6 +224,9 @@ class RealPrivateSpeechController(
 
         speechStateJob?.cancel()
         speechStateJob = null
+
+        languageJob?.cancel()
+        languageJob = null
 
         speechController.stop()
 

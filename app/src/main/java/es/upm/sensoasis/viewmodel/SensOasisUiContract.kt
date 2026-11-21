@@ -1,16 +1,17 @@
 package es.upm.sensoasis.viewmodel
 
-import es.upm.sensoasis.domain.model.AirQualitySummary
+import es.upm.sensoasis.domain.model.AppLanguage
 import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.domain.model.Fountain
 import es.upm.sensoasis.domain.model.FountainReport
 import es.upm.sensoasis.domain.model.FountainStatus
+import es.upm.sensoasis.domain.model.HourlyTemperatureSnapshot
 import es.upm.sensoasis.domain.model.LightCaptureResult
 import es.upm.sensoasis.domain.model.LightObservation
 import es.upm.sensoasis.domain.model.ProximityState
-import es.upm.sensoasis.domain.model.SpeechState
 import es.upm.sensoasis.domain.model.ReportReceiveState
+import es.upm.sensoasis.domain.model.SpeechState
 import java.time.Instant
 
 /**
@@ -48,7 +49,9 @@ data class SensOasisUiState(
     val fountainDistancesMeters: Map<String, Int> = emptyMap(),
     val latestCommunityReport: FountainReport? = null,
     val communityReportsByFountain: Map<String, FountainReport> = emptyMap(),
-    val airQuality: AirQualitySummary? = null,
+    val hourlyTemperature: HourlyTemperatureSnapshot? = null,
+    val isLoadingHourlyTemperature: Boolean = false,
+    val language: AppLanguage = AppLanguage.EN,
     val reportDraftStatus: FountainStatus = FountainStatus.WORKING,
     val lightState: LightCaptureResult? = null,
     val reportState: ReportFlowState = ReportFlowState.IDLE,
@@ -75,6 +78,7 @@ data class SensOasisUiState(
  */
 sealed interface UiAction {
     data class SelectFountain(val fountainId: String) : UiAction
+    data class SetLanguage(val language: AppLanguage) : UiAction
     data object OpenReport : UiAction
     data object CaptureLight : UiAction
     data class ChangeFountainStatus(val status: FountainStatus) : UiAction

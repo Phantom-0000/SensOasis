@@ -1,12 +1,12 @@
 package es.upm.sensoasis.fake
 
-import es.upm.sensoasis.domain.model.AirQualitySummary
 import es.upm.sensoasis.domain.model.ConnectionState
 import es.upm.sensoasis.domain.model.Constants
 import es.upm.sensoasis.domain.model.Coordinates
 import es.upm.sensoasis.domain.model.Fountain
 import es.upm.sensoasis.domain.model.FountainReport
 import es.upm.sensoasis.domain.model.FountainStatus
+import es.upm.sensoasis.domain.model.HourlyTemperatureSnapshot
 import es.upm.sensoasis.domain.model.LightBand
 import es.upm.sensoasis.domain.model.LightCaptureResult
 import es.upm.sensoasis.domain.model.LightObservation
@@ -28,16 +28,12 @@ object SampleData {
 
     val referenceNow: Instant = Instant.parse("2026-11-02T14:15:00Z")
 
-    val sampleAirQualityGood = AirQualitySummary(
-        value = 28,
-        category = "GOOD",
-        observedAt = referenceNow.minus(Duration.ofMinutes(15))
-    )
-
-    val sampleAirQualityModerate = AirQualitySummary(
-        value = 58,
-        category = "MODERATE",
-        observedAt = referenceNow.minus(Duration.ofMinutes(20))
+    val sampleHourlyTemperature = HourlyTemperatureSnapshot(
+        hours = listOf(8, 10, 12, 14, 16, 18, 20),
+        tempsCelsius = listOf(10.0, 12.5, 15.0, 17.5, 18.0, 15.5, 13.0),
+        dateLabel = "2026-11-02",
+        fetchedAtEpochSec = referenceNow.epochSecond,
+        isOfflineCached = false
     )
 
     val fountains: List<Fountain> = listOf(
@@ -46,7 +42,6 @@ object SampleData {
             name = "Fuente Puerta del Sol",
             coordinates = Coordinates(latitude = 40.4169, longitude = -3.7035),
             officialStatus = FountainStatus.WORKING,
-            airQuality = sampleAirQualityGood,
             address = "Plaza de la Puerta del Sol, Madrid"
         ),
         Fountain(
@@ -54,7 +49,6 @@ object SampleData {
             name = "Fuente Parque del Retiro - Estanque",
             coordinates = Coordinates(latitude = 40.4172, longitude = -3.6838),
             officialStatus = FountainStatus.WORKING,
-            airQuality = sampleAirQualityGood,
             address = "Plaza de la Independencia, 7, Madrid"
         ),
         Fountain(
@@ -62,7 +56,6 @@ object SampleData {
             name = "Fuente UPM Campus Sur - ETSIST",
             coordinates = Coordinates(latitude = 40.3898, longitude = -3.6283),
             officialStatus = FountainStatus.WORKING,
-            airQuality = sampleAirQualityModerate,
             address = "Calle Nikola Tesla, s/n, Madrid"
         ),
         Fountain(
@@ -70,7 +63,6 @@ object SampleData {
             name = "Fuente Plaza Mayor",
             coordinates = Coordinates(latitude = 40.4155, longitude = -3.7074),
             officialStatus = FountainStatus.NOT_WORKING,
-            airQuality = sampleAirQualityGood,
             address = "Plaza Mayor, Madrid"
         ),
         Fountain(
@@ -78,7 +70,6 @@ object SampleData {
             name = "Fuente Paseo del Prado - Cibeles",
             coordinates = Coordinates(latitude = 40.4189, longitude = -3.6929),
             officialStatus = FountainStatus.UNKNOWN,
-            airQuality = null,
             address = "Paseo del Prado, 1, Madrid"
         ),
         Fountain(
@@ -86,7 +77,6 @@ object SampleData {
             name = "Fuente Atocha - Jardín Tropical",
             coordinates = Coordinates(latitude = 40.4065, longitude = -3.6896),
             officialStatus = FountainStatus.WORKING,
-            airQuality = sampleAirQualityModerate,
             address = "Plaza del Emperador Carlos V, Madrid"
         )
     )
@@ -168,7 +158,7 @@ object SampleData {
             fountainDistancesMeters = defaultDistances,
             latestCommunityReport = report,
             communityReportsByFountain = mapOf(report.fountainId to report),
-            airQuality = sampleAirQualityGood,
+            hourlyTemperature = sampleHourlyTemperature,
             mqttState = ConnectionState.CONNECTED,
             proximityState = ProximityState.FAR,
             now = now

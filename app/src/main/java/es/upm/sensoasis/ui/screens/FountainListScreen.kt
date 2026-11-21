@@ -85,6 +85,7 @@ fun FountainListScreen(
     val displayedFountains = if (showWorkingOnly) {
         state.fountains.filter { fountain ->
             val reportedStatus = state.communityReportsByFountain[fountain.id]
+                ?.takeIf { !it.isExpired(state.now) }
                 ?.status
                 ?.takeIf { it != FountainStatus.UNKNOWN }
             val effectiveStatus = reportedStatus ?: fountain.officialStatus
@@ -146,15 +147,24 @@ fun FountainListScreen(
                         onAction(UiAction.RefreshFountains)
                         onAction(UiAction.RefreshLocation)
                     },
+                    enabled = !state.isLoadingFountains,
                     shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                     modifier = Modifier.heightIn(min = 48.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = strings.refresh,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    if (state.isLoadingFountains) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = strings.refresh,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
 
@@ -398,6 +408,9 @@ fun FountainListScreen(
                 ) { fountain ->
                     val distance = state.fountainDistancesMeters[fountain.id]
                     val report = state.communityReportsByFountain[fountain.id]
+                        ?.takeIf { !it.isExpired(state.now) }
+                    val effectiveStatus = report?.status?.takeIf { it != FountainStatus.UNKNOWN }
+                        ?: fountain.officialStatus
 
                     Card(
                         modifier = Modifier
@@ -465,8 +478,8 @@ fun FountainListScreen(
                                 )
                             }
 
-                            // High-Recognition Graphical Water Status Badge
-                            LargeWaterStatusBadge(status = fountain.officialStatus)
+                            // High-Recognition Graphical Water Status Badge (effective status aligned with filter)
+                            LargeWaterStatusBadge(status = effectiveStatus)
 
                             // Community Report Box (when available)
                             if (report != null) {

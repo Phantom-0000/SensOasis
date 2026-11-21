@@ -9,25 +9,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import es.upm.sensoasis.domain.model.AppLanguage
 import es.upm.sensoasis.domain.model.FountainStatus
 import es.upm.sensoasis.domain.model.LightBand
 import es.upm.sensoasis.domain.model.LightQuality
 import java.time.Duration
 import java.time.Instant
-
-/**
- * Supported UI languages: English, Spanish (Castilian), and Catalan.
- */
-enum class AppLanguage(val code: String, val shortLabel: String) {
-    EN("en", "EN"),
-    ES("es", "ES"),
-    CA("ca", "CA");
-
-    companion object {
-        fun fromCode(code: String?): AppLanguage =
-            entries.firstOrNull { it.code.equals(code, ignoreCase = true) } ?: EN
-    }
-}
 
 /**
  * Senior-friendly text scale presets switchable with one tap on HomeScreen.
@@ -149,7 +136,6 @@ data class AppStrings(
     val reportedStatusPrefix: String,
     val fountainDetailsTitle: String,
     val coordinatesPrefix: String,
-    val airQualityPrefix: String,
     val sunlightObservationTitle: String,
     val sunlightNotIncluded: String,
     val lightBrightTitle: String,
@@ -241,6 +227,30 @@ data class AppStrings(
         LightQuality.UNAVAILABLE -> qualityUnavailable
     }
 
+    fun formatSensorReason(reason: String, lang: AppLanguage): String = when (reason) {
+        "TYPE_LIGHT_MISSING" -> when (lang) {
+            AppLanguage.EN -> "Light sensor not supported on this device"
+            AppLanguage.ES -> "Sensor de luz no soportado en este dispositivo"
+            AppLanguage.CA -> "Sensor de llum no compatible en aquest dispositiu"
+        }
+        "PROXIMITY_UNCONFIRMED" -> when (lang) {
+            AppLanguage.EN -> "Proximity check unconfirmed"
+            AppLanguage.ES -> "Sensor de proximidad sin confirmar"
+            AppLanguage.CA -> "Sensor de proximitat sense confirmar"
+        }
+        "SENSOR_REGISTRATION_FAILED" -> when (lang) {
+            AppLanguage.EN -> "Failed to start light sensor"
+            AppLanguage.ES -> "No se pudo iniciar el sensor de luz"
+            AppLanguage.CA -> "No s'ha pogut iniciar el sensor de llum"
+        }
+        "LIGHT_TIMEOUT" -> when (lang) {
+            AppLanguage.EN -> "Measurement timed out"
+            AppLanguage.ES -> "Tiempo de medición agotado"
+            AppLanguage.CA -> "Temps de mesura esgotat"
+        }
+        else -> reason.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
+    }
+
     fun formatAge(observedAt: Instant, now: Instant = Instant.now()): String {
         val minutes = Duration.between(observedAt, now).toMinutes().coerceAtLeast(0L)
         return when {
@@ -259,7 +269,7 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
 }
 
 private val EnglishStrings = AppStrings(
-    appSubtitle = "Drinking water & shade",
+    appSubtitle = "Drinking water & comfort",
     languageLabel = "Language",
     textSizeLabel = "Text Size",
     liveOnline = "Live Updates: Online",
@@ -301,15 +311,14 @@ private val EnglishStrings = AppStrings(
     reportedStatusPrefix = "Reported",
     fountainDetailsTitle = "Fountain Details",
     coordinatesPrefix = "Coordinates",
-    airQualityPrefix = "Air Quality",
-    sunlightObservationTitle = "Sunlight & Shade Check",
-    sunlightNotIncluded = "Sunlight & shade: Not included in this report.",
-    lightBrightTitle = "Bright Sun",
-    lightBrightDesc = "High glare / direct sun exposure",
-    lightModerateTitle = "Comfortable Shade",
-    lightModerateDesc = "Moderate light / pleasant visibility",
-    lightLowTitle = "Low Light / Shaded",
-    lightLowDesc = "Deep shade or evening dimness",
+    sunlightObservationTitle = "Ambient Light Check",
+    sunlightNotIncluded = "Ambient light: Not included in this report.",
+    lightBrightTitle = "Bright Sunlight",
+    lightBrightDesc = "High glare / exposed area",
+    lightModerateTitle = "Moderate Light",
+    lightModerateDesc = "Comfortable visibility (low glare)",
+    lightLowTitle = "Low Light",
+    lightLowDesc = "Shaded or dim area",
     qualityValid = "Verified reading",
     qualityOccluded = "Sensor covered",
     qualityUnavailable = "Unavailable",
@@ -325,7 +334,7 @@ private val EnglishStrings = AppStrings(
     speechOff = "Off — turn on switch above to listen",
     speechWaiting = "Ready — lift phone to your ear like a call",
     speechSpeaking = "Speaking privately through top earpiece",
-    speechError = "Voice playback unavailable",
+    speechError = "English voice pack is missing or unavailable on this device (check Android TTS settings).",
     earSensorLabel = "Ear sensor",
     earNear = "Near ear",
     earFar = "Away from ear",
@@ -337,9 +346,9 @@ private val EnglishStrings = AppStrings(
     reportStatus = "Report Status",
     reportFountainTitle = "Report Fountain",
     step1WaterWorking = "1. Is Water Working?",
-    step2SunlightCheck = "2. Sunlight & Shade Check",
-    step2SunlightCompact = "2. Sunlight & Shade (Optional)",
-    sensorClear = "Clear",
+    step2SunlightCheck = "2. Ambient Light Check",
+    step2SunlightCompact = "2. Ambient Light (Optional)",
+    sensorClear = "Uncovered",
     sensorCovered = "Covered",
     sensorReady = "Ready",
     statusPrefix = "Status",
@@ -351,11 +360,11 @@ private val EnglishStrings = AppStrings(
     stateSentSuccess = "Sent!",
     stateOffline = "Offline",
     stateError = "Error",
-    lightPromptIdle = "Hold phone face-up uncovered to share shade/glare, or send status directly.",
+    lightPromptIdle = "Hold phone face-up uncovered to measure light & glare, or send status directly.",
     lightMeasuredPrefix = "Measured",
     lightOccludedMsg = "Top of phone was covered — report will be sent without light data.",
     lightUnavailableMsg = { r -> "Light check unavailable ($r). You can still send." },
-    measureSunlightBtn = "Measure Sunlight & Shade (1.5s)",
+    measureSunlightBtn = "Measure Ambient Light (1.5s)",
     measuringBrightnessBtn = "Measuring brightness...",
     confirmSendBtn = "Confirm & Send Fountain Report",
     sendingReportBtn = "Sending Fountain Report...",
@@ -369,7 +378,7 @@ private val EnglishStrings = AppStrings(
 )
 
 private val SpanishStrings = AppStrings(
-    appSubtitle = "Agua potable y sombra",
+    appSubtitle = "Agua potable y luz cómoda",
     languageLabel = "Idioma",
     textSizeLabel = "Tamaño letra",
     liveOnline = "En vivo: Conectado",
@@ -411,15 +420,14 @@ private val SpanishStrings = AppStrings(
     reportedStatusPrefix = "Aviso",
     fountainDetailsTitle = "Detalle de la fuente",
     coordinatesPrefix = "Coordenadas",
-    airQualityPrefix = "Calidad del aire",
-    sunlightObservationTitle = "Sol y sombra en la fuente",
-    sunlightNotIncluded = "Luz solar: No incluida en este aviso.",
-    lightBrightTitle = "Sol intenso",
-    lightBrightDesc = "Alto deslumbramiento / pleno sol",
-    lightModerateTitle = "Sombra agradable",
-    lightModerateDesc = "Luz moderada y cómoda",
-    lightLowTitle = "Poca luz / Sombra",
-    lightLowDesc = "Zona sombreada o atardecer",
+    sunlightObservationTitle = "Luz ambiental en la fuente",
+    sunlightNotIncluded = "Luz ambiental: No incluida en este aviso.",
+    lightBrightTitle = "Luz brillante",
+    lightBrightDesc = "Alto deslumbramiento / zona expuesta",
+    lightModerateTitle = "Luz moderada",
+    lightModerateDesc = "Visibilidad cómoda (poco reflejo)",
+    lightLowTitle = "Poca luz",
+    lightLowDesc = "Zona sombreada o tenue",
     qualityValid = "Lectura válida",
     qualityOccluded = "Sensor tapado",
     qualityUnavailable = "No disponible",
@@ -435,7 +443,7 @@ private val SpanishStrings = AppStrings(
     speechOff = "Apagado — active el interruptor superior",
     speechWaiting = "Listo — acerque el móvil a su oído",
     speechSpeaking = "Hablando en privado por el auricular",
-    speechError = "Voz no disponible en este dispositivo",
+    speechError = "El paquete de voz en español falta o no está disponible en este dispositivo (revise ajustes TTS).",
     earSensorLabel = "Sensor oído",
     earNear = "Cerca del oído",
     earFar = "Lejos del oído",
@@ -447,8 +455,8 @@ private val SpanishStrings = AppStrings(
     reportStatus = "Informar estado",
     reportFountainTitle = "Informar fuente",
     step1WaterWorking = "1. ¿Sale agua?",
-    step2SunlightCheck = "2. Control de sol y sombra",
-    step2SunlightCompact = "2. Sol y sombra (Opcional)",
+    step2SunlightCheck = "2. Medición de luz ambiental",
+    step2SunlightCompact = "2. Luz ambiental (Opcional)",
     sensorClear = "Libre",
     sensorCovered = "Tapado",
     sensorReady = "Listo",
@@ -461,11 +469,11 @@ private val SpanishStrings = AppStrings(
     stateSentSuccess = "¡Enviado!",
     stateOffline = "Sin conexión",
     stateError = "Error",
-    lightPromptIdle = "Sostenga el móvil boca arriba sin tapar para medir el sol, o envíe directamente.",
+    lightPromptIdle = "Sostenga el móvil boca arriba sin tapar para medir la luz ambiental, o envíe directamente.",
     lightMeasuredPrefix = "Medido",
     lightOccludedMsg = "Parte superior tapada — se enviará sin datos de luz.",
     lightUnavailableMsg = { r -> "Sensor de luz no disponible ($r). Puede enviar igual." },
-    measureSunlightBtn = "Medir sol y sombra (1,5 s)",
+    measureSunlightBtn = "Medir luz ambiental (1,5 s)",
     measuringBrightnessBtn = "Midiendo brillo...",
     confirmSendBtn = "Confirmar y enviar aviso",
     sendingReportBtn = "Enviando aviso...",
@@ -479,7 +487,7 @@ private val SpanishStrings = AppStrings(
 )
 
 private val CatalanStrings = AppStrings(
-    appSubtitle = "Aigua potable i ombra",
+    appSubtitle = "Aigua potable i llum còmoda",
     languageLabel = "Idioma",
     textSizeLabel = "Mida lletra",
     liveOnline = "En viu: Connectat",
@@ -521,15 +529,14 @@ private val CatalanStrings = AppStrings(
     reportedStatusPrefix = "Avís",
     fountainDetailsTitle = "Detall de la font",
     coordinatesPrefix = "Coordenades",
-    airQualityPrefix = "Qualitat de l'aire",
-    sunlightObservationTitle = "Sol i ombra a la font",
-    sunlightNotIncluded = "Llum solar: No inclosa en aquest avís.",
-    lightBrightTitle = "Sol intens",
-    lightBrightDesc = "Alt enlluernament / ple sol",
-    lightModerateTitle = "Ombra agradable",
-    lightModerateDesc = "Llum moderada i còmoda",
-    lightLowTitle = "Poca llum / Ombra",
-    lightLowDesc = "Zona ombrejada o capvespre",
+    sunlightObservationTitle = "Llum ambiental a la font",
+    sunlightNotIncluded = "Llum ambiental: No inclosa en aquest avís.",
+    lightBrightTitle = "Llum brillant",
+    lightBrightDesc = "Alt enlluernament / zona exposada",
+    lightModerateTitle = "Llum moderada",
+    lightModerateDesc = "Visibilitat còmoda (poc reflex)",
+    lightLowTitle = "Poca llum",
+    lightLowDesc = "Zona ombrejada o tènue",
     qualityValid = "Lectura vàlida",
     qualityOccluded = "Sensor tapat",
     qualityUnavailable = "No disponible",
@@ -545,7 +552,7 @@ private val CatalanStrings = AppStrings(
     speechOff = "Apagat — activeu l'interruptor superior",
     speechWaiting = "Llest — acosteu el mòbil a l'orella",
     speechSpeaking = "Parlant en privat per l'auricular",
-    speechError = "Veu no disponible en aquest dispositiu",
+    speechError = "El paquet de veu en català falta o no està disponible en aquest dispositiu (reviseu ajustos TTS).",
     earSensorLabel = "Sensor orella",
     earNear = "A prop de l'orella",
     earFar = "Lluny de l'orella",
@@ -557,8 +564,8 @@ private val CatalanStrings = AppStrings(
     reportStatus = "Informar estat",
     reportFountainTitle = "Informar font",
     step1WaterWorking = "1. Surt aigua?",
-    step2SunlightCheck = "2. Control de sol i ombra",
-    step2SunlightCompact = "2. Sol i ombra (Opcional)",
+    step2SunlightCheck = "2. Mesura de llum ambiental",
+    step2SunlightCompact = "2. Llum ambiental (Opcional)",
     sensorClear = "Lliure",
     sensorCovered = "Tapat",
     sensorReady = "Llest",
@@ -571,11 +578,11 @@ private val CatalanStrings = AppStrings(
     stateSentSuccess = "Enviat!",
     stateOffline = "Sense connexió",
     stateError = "Error",
-    lightPromptIdle = "Sostingueu el mòbil cara amunt sense tapar per mesurar el sol, o envieu directament.",
+    lightPromptIdle = "Sostingueu el mòbil cara amunt sense tapar per mesurar la llum ambiental, o envieu directament.",
     lightMeasuredPrefix = "Mesurat",
     lightOccludedMsg = "Part superior tapada — s'enviarà sense dades de llum.",
     lightUnavailableMsg = { r -> "Sensor de llum no disponible ($r). Podeu enviar igualment." },
-    measureSunlightBtn = "Mesurar sol i ombra (1,5 s)",
+    measureSunlightBtn = "Mesurar llum ambiental (1,5 s)",
     measuringBrightnessBtn = "Mesurant brillantor...",
     confirmSendBtn = "Confirmar i enviar avís",
     sendingReportBtn = "Enviant avís...",
